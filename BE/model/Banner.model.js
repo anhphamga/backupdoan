@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
 
+const hasText = (value) => {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return String(value.vi || value.en || '').trim().length > 0;
+  }
+  return false;
+};
+
 /**
  * Banner model
  * Cho phép lưu cả:
@@ -11,14 +19,16 @@ const mongoose = require('mongoose');
 const bannerSchema = new mongoose.Schema(
   {
     title: {
-      type: String,
+      type: mongoose.Schema.Types.Mixed,
       required: true,
-      trim: true,
+      validate: {
+        validator: hasText,
+        message: 'title is required',
+      },
     },
     subtitle: {
-      type: String,
+      type: mongoose.Schema.Types.Mixed,
       default: '',
-      trim: true,
     },
 
     // Link người dùng bấm vào banner sẽ được dẫn tới

@@ -1,4 +1,10 @@
 const Blog = require('../model/Blog.model');
+const {
+  getRequestLang,
+  resolveLocalizedField,
+  normalizeLocalizedInput,
+  hasLocalizedText,
+} = require('../utils/i18n');
 
 const toNumber = (value, fallback = 0) => {
   const n = Number(value);
@@ -13,23 +19,23 @@ const normalizeStatus = (value) => {
 };
 
 const normalizePayload = (body = {}) => ({
-  title: String(body.title || '').trim(),
+  title: normalizeLocalizedInput(body, 'title'),
   slug: String(body.slug || '').trim(),
   thumbnail: String(body.thumbnail || '').trim(),
-  category: String(body.category || '').trim(),
-  content: String(body.content || '').trim(),
+  category: normalizeLocalizedInput(body, 'category'),
+  content: normalizeLocalizedInput(body, 'content'),
   status: normalizeStatus(body.status),
   likeCount: Math.max(toNumber(body.likeCount, 0), 0),
   viewCount: Math.max(toNumber(body.viewCount, 0), 0),
 });
 
-const mapBlog = (item) => ({
+const mapBlog = (item, lang = 'vi') => ({
   _id: item._id,
-  title: item.title || '',
+  title: resolveLocalizedField(item, 'title', lang),
   slug: item.slug || '',
-  content: item.content || '',
+  content: resolveLocalizedField(item, 'content', lang),
   thumbnail: item.thumbnail || '',
-  category: item.category || '',
+  category: resolveLocalizedField(item, 'category', lang),
   likeCount: Number(item.likeCount || 0),
   viewCount: Number(item.viewCount || 0),
   status: normalizeStatus(item.status || 'published'),
@@ -39,6 +45,7 @@ const mapBlog = (item) => ({
 
 const getAllBlogs = async (req, res) => {
   try {
+    const lang = getRequestLang(req.query.lang);
     const scope = String(req.query.scope || '').trim().toLowerCase();
     const filter =
       scope === 'all'
@@ -54,7 +61,7 @@ const getAllBlogs = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Get all blogs successfully',
-      data: blogs.map(mapBlog),
+      data: blogs.map((item) => mapBlog(item, lang)),
     });
   } catch (error) {
     return res.status(500).json({
@@ -67,6 +74,7 @@ const getAllBlogs = async (req, res) => {
 
 const getBlogById = async (req, res) => {
   try {
+    const lang = getRequestLang(req.query.lang);
     const blog = await Blog.findById(req.params.id).lean();
     if (!blog) {
       return res.status(404).json({
@@ -76,7 +84,7 @@ const getBlogById = async (req, res) => {
     }
     return res.status(200).json({
       success: true,
-      data: mapBlog(blog),
+      data: mapBlog(blog, lang),
     });
   } catch (error) {
     return res.status(500).json({
@@ -89,8 +97,9 @@ const getBlogById = async (req, res) => {
 
 const createBlog = async (req, res) => {
   try {
+    const lang = getRequestLang(req.query.lang);
     const payload = normalizePayload(req.body);
-    if (!payload.title || !payload.content) {
+    if (!hasLocalizedText(payload.title) || !hasLocalizedText(payload.content)) {
       return res.status(400).json({
         success: false,
         message: 'title and content are required',
@@ -100,7 +109,7 @@ const createBlog = async (req, res) => {
     const created = await Blog.create(payload);
     return res.status(201).json({
       success: true,
-      data: mapBlog(created),
+      data: mapBlog(created, lang),
     });
   } catch (error) {
     return res.status(500).json({
@@ -113,8 +122,9 @@ const createBlog = async (req, res) => {
 
 const updateBlog = async (req, res) => {
   try {
+    const lang = getRequestLang(req.query.lang);
     const payload = normalizePayload(req.body);
-    if (!payload.title || !payload.content) {
+    if (!hasLocalizedText(payload.title) || !hasLocalizedText(payload.content)) {
       return res.status(400).json({
         success: false,
         message: 'title and content are required',
@@ -133,7 +143,7 @@ const updateBlog = async (req, res) => {
     }
     return res.status(200).json({
       success: true,
-      data: mapBlog(updated),
+      data: mapBlog(updated, lang),
     });
   } catch (error) {
     return res.status(500).json({

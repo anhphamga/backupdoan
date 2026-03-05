@@ -1,10 +1,21 @@
 const mongoose = require('mongoose');
 
+const hasText = (value) => {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return String(value.vi || value.en || '').trim().length > 0;
+  }
+  return false;
+};
+
 const blogSchema = new mongoose.Schema({
   title: {
-    type: String,
+    type: mongoose.Schema.Types.Mixed,
     required: true,
-    trim: true
+    validate: {
+      validator: hasText,
+      message: 'title is required',
+    },
   },
   slug: {
     type: String,
@@ -17,8 +28,7 @@ const blogSchema = new mongoose.Schema({
     default: ''
   },
   category: {
-    type: String,
-    trim: true,
+    type: mongoose.Schema.Types.Mixed,
     default: ''
   },
   likeCount: {
@@ -37,8 +47,12 @@ const blogSchema = new mongoose.Schema({
     default: 'draft'
   },
   content: {
-    type: String,
-    required: true
+    type: mongoose.Schema.Types.Mixed,
+    required: true,
+    validate: {
+      validator: hasText,
+      message: 'content is required',
+    },
   }
 }, {
   timestamps: true

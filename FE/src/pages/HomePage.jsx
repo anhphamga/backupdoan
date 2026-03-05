@@ -529,7 +529,7 @@ const Homepage = ({ initialSection = "" }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isSliderPaused, setIsSliderPaused] = useState(false);
   const [activeSection, setActiveSection] = useState(initialSection || "rent");
-  const [categories, setCategories] = useState(PRODUCT_CATEGORIES);
+  const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState("");
   const [topRentProducts, setTopRentProducts] = useState([]);
@@ -541,6 +541,7 @@ const Homepage = ({ initialSection = "" }) => {
   const [blogs, setBlogs] = useState([]);
   const [blogsLoading, setBlogsLoading] = useState(true);
   const [blogsError, setBlogsError] = useState("");
+  const [apiBanners, setApiBanners] = useState([]);
   const [categorySlideIndex, setCategorySlideIndex] = useState(0);
   const [categoryVisibleCount, setCategoryVisibleCount] = useState(3);
   const slideIntervalRef = useRef(null);
@@ -548,8 +549,7 @@ const Homepage = ({ initialSection = "" }) => {
   const accountMenuRef = useRef(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
-  // Banners từ file local - dùng useMemo để cập nhật khi lang thay đổi
-  const heroBanners = useMemo(
+  const fallbackHeroBanners = useMemo(
     () => [
       {
         _id: "banner1",
@@ -575,6 +575,22 @@ const Homepage = ({ initialSection = "" }) => {
     ],
     [lang]
   );
+
+  const heroBanners = useMemo(() => {
+    if (!Array.isArray(apiBanners) || apiBanners.length === 0) {
+      return fallbackHeroBanners;
+    }
+
+    return apiBanners
+      .map((item, index) => ({
+        _id: item?._id || `banner-api-${index + 1}`,
+        title: String(item?.title || "").trim(),
+        subtitle: String(item?.subtitle || "").trim(),
+        imageUrl: String(item?.imageUrl || item?.imagePath || "").trim(),
+        targetLink: String(item?.targetLink || "#rent").trim() || "#rent",
+      }))
+      .filter((item) => item.imageUrl);
+  }, [apiBanners, fallbackHeroBanners]);
 
   const stopAutoSlide = useCallback(() => {
     if (slideIntervalRef.current) {
@@ -710,12 +726,42 @@ const Homepage = ({ initialSection = "" }) => {
   useEffect(() => {
     let isMounted = true;
 
+    const fetchBanners = async () => {
+      try {
+        const params = new URLSearchParams({ lang });
+        const response = await fetch(`/api/banners?${params.toString()}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const bannerData = Array.isArray(payload?.data) ? payload.data : [];
+        if (isMounted) {
+          setApiBanners(bannerData);
+        }
+      } catch {
+        if (isMounted) {
+          setApiBanners([]);
+        }
+      }
+    };
+
+    fetchBanners();
+    return () => {
+      isMounted = false;
+    };
+  }, [lang]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     const fetchCategories = async () => {
       try {
         setCategoriesLoading(true);
         setCategoriesError("");
 
-        const response = await fetch("/api/categories");
+        const params = new URLSearchParams({ lang });
+        const response = await fetch(`/api/categories?${params.toString()}`);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -725,11 +771,12 @@ const Homepage = ({ initialSection = "" }) => {
           ? payload.categories
           : [];
 
-        if (isMounted && apiCategories.length > 0) {
+        if (isMounted) {
           setCategories(apiCategories);
         }
       } catch {
         if (isMounted) {
+          setCategories([]);
           setCategoriesError(
             lang === "vi"
               ? "Không tải được danh mục từ API, đang dùng dữ liệu dự phòng."
@@ -757,7 +804,8 @@ const Homepage = ({ initialSection = "" }) => {
         setBlogsLoading(true);
         setBlogsError("");
 
-        const response = await fetch("/api/blogs");
+        const params = new URLSearchParams({ lang });
+        const response = await fetch(`/api/blogs?${params.toString()}`);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -797,8 +845,8 @@ const Homepage = ({ initialSection = "" }) => {
         setFittingLoading(true);
 
         const [buyRes, fittingRes] = await Promise.all([
-          fetch("/api/products?purpose=all&limit=200"),
-          fetch("/api/products?purpose=all&limit=200"),
+          fetch(`/api/products?${new URLSearchParams({ purpose: "all", limit: "200", lang }).toString()}`),
+          fetch(`/api/products?${new URLSearchParams({ purpose: "all", limit: "200", lang }).toString()}`),
         ]);
 
         if (buyRes.ok) {
@@ -817,7 +865,11 @@ const Homepage = ({ initialSection = "" }) => {
           }
         }
       } catch (error) {
-        console.warn("product list API unavailable, using fallback data", error);
+        if (isMounted) {
+          setBuyProducts([]);
+          setFittingProducts([]);
+        }
+        console.warn("product list API unavailable", error);
       } finally {
         if (isMounted) {
           setBuyLoading(false);
@@ -830,7 +882,7 @@ const Homepage = ({ initialSection = "" }) => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     let isMounted = true;
@@ -839,7 +891,9 @@ const Homepage = ({ initialSection = "" }) => {
       try {
         setTopRentLoading(true);
 
-        const response = await fetch("/api/products/top-liked?limit=24");
+        const response = await fetch(
+          `/api/products/top-liked?${new URLSearchParams({ limit: "24", lang }).toString()}`
+        );
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -850,8 +904,10 @@ const Homepage = ({ initialSection = "" }) => {
           setTopRentProducts(apiData);
         }
       } catch (error) {
-        // Silent fallback: keep UI stable with fallback cards when API is unavailable.
-        console.warn("top-liked API unavailable, using fallback data", error);
+        if (isMounted) {
+          setTopRentProducts([]);
+        }
+        console.warn("top-liked API unavailable", error);
       } finally {
         if (isMounted) {
           setTopRentLoading(false);
