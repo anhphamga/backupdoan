@@ -16,6 +16,19 @@ export default function BookingPage() {
   });
   const [loading, setLoading] = useState(true);
 
+  const flattenCategoryNames = (nodes = [], bag = []) => {
+    nodes.forEach((node) => {
+      const name = String(node?.displayName || "").trim();
+      if (name) {
+        bag.push(name);
+      }
+      if (Array.isArray(node?.children) && node.children.length > 0) {
+        flattenCategoryNames(node.children, bag);
+      }
+    });
+    return bag;
+  };
+
   useEffect(() => {
     let mounted = true;
     const run = async () => {
@@ -23,7 +36,7 @@ export default function BookingPage() {
         const res = await fetch("/api/categories");
         const data = res.ok ? await res.json() : { categories: [] };
         const names = Array.isArray(data?.categories)
-          ? data.categories.map((c) => c.displayName).filter(Boolean)
+          ? flattenCategoryNames(data.categories)
           : [];
         if (mounted) {
           setCategories([...new Set(names)]);

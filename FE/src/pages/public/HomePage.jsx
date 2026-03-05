@@ -529,7 +529,7 @@ const Homepage = ({ initialSection = "" }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isSliderPaused, setIsSliderPaused] = useState(false);
   const [activeSection, setActiveSection] = useState(initialSection || "rent");
-  const [categories, setCategories] = useState(PRODUCT_CATEGORIES);
+  const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState("");
   const [topRentProducts, setTopRentProducts] = useState([]);
@@ -725,11 +725,12 @@ const Homepage = ({ initialSection = "" }) => {
           ? payload.categories
           : [];
 
-        if (isMounted && apiCategories.length > 0) {
+        if (isMounted) {
           setCategories(apiCategories);
         }
       } catch {
         if (isMounted) {
+          setCategories([]);
           setCategoriesError(
             lang === "vi"
               ? "Không tải được danh mục từ API, đang dùng dữ liệu dự phòng."
@@ -817,7 +818,11 @@ const Homepage = ({ initialSection = "" }) => {
           }
         }
       } catch (error) {
-        console.warn("product list API unavailable, using fallback data", error);
+        if (isMounted) {
+          setBuyProducts([]);
+          setFittingProducts([]);
+        }
+        console.warn("product list API unavailable", error);
       } finally {
         if (isMounted) {
           setBuyLoading(false);
@@ -850,8 +855,10 @@ const Homepage = ({ initialSection = "" }) => {
           setTopRentProducts(apiData);
         }
       } catch (error) {
-        // Silent fallback: keep UI stable with fallback cards when API is unavailable.
-        console.warn("top-liked API unavailable, using fallback data", error);
+        if (isMounted) {
+          setTopRentProducts([]);
+        }
+        console.warn("top-liked API unavailable", error);
       } finally {
         if (isMounted) {
           setTopRentLoading(false);

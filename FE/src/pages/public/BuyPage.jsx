@@ -174,7 +174,8 @@ export default function BuyPage() {
     let mounted = true;
     const run = async () => {
       try {
-        const res = await fetch("/api/categories");
+        const params = new URLSearchParams({ lang });
+        const res = await fetch(`/api/categories?${params.toString()}`);
         const data = res.ok ? await res.json() : { categories: [] };
         if (mounted) {
           setCategories(Array.isArray(data?.categories) ? data.categories : []);
@@ -187,7 +188,7 @@ export default function BuyPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [lang]);
 
   const categoryTree = useMemo(() => buildSidebarTree(categories, lang), [categories, lang]);
   const allCategoryNodes = useMemo(() => flattenCategories(categoryTree), [categoryTree]);
@@ -259,6 +260,7 @@ export default function BuyPage() {
           purpose: "buy",
           limit: "24",
           page: String(page),
+          lang,
         });
         if (selectedCategory) {
           params.set("category", selectedCategory);
@@ -284,7 +286,7 @@ export default function BuyPage() {
     return () => {
       mounted = false;
     };
-  }, [selectedCategory, page]);
+  }, [selectedCategory, page, lang]);
 
   useEffect(() => {
     setPage(1);
