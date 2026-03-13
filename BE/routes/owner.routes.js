@@ -10,6 +10,7 @@ const router = express.Router();
 
 const userController = require('../controllers/user.controller');
 const productController = require('../controllers/product.controller');
+const categoryController = require('../controllers/category.controller');
 const staffController = require('../controllers/staff.controller');
 const shiftController = require('../controllers/shift.controller');
 const analyticsController = require('../controllers/analytics.controller');
@@ -20,6 +21,12 @@ const { uploadExcel, uploadProductImages } = require('../middleware/upload.middl
 router.get('/customers', requireAuth, requireOwner, userController.listCustomers);
 router.get('/customers/:id', requireAuth, requireOwner, userController.getCustomerDetail);
 router.patch('/customers/:id/status', requireAuth, requireOwner, userController.updateCustomerStatus);
+
+// Owner: quản lý sản phẩm
+router.get('/categories', requireAuth, requireOwner, categoryController.listOwnerCategories);
+router.post('/categories', requireAuth, requireOwner, categoryController.createCategory);
+router.put('/categories/:id', requireAuth, requireOwner, categoryController.updateCategory);
+router.delete('/categories/:id', requireAuth, requireOwner, categoryController.deleteCategory);
 
 // Owner: quản lý sản phẩm
 router.get('/products', requireAuth, requireOwner, productController.listOwnerProducts);
