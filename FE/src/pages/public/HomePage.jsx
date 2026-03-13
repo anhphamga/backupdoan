@@ -1953,7 +1953,7 @@ const Homepage = ({ initialSection = "" }) => {
           </div>
         </div>
       </footer>
-    </>
+    </div>
   );
 };
 

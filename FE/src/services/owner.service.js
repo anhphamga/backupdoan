@@ -48,6 +48,26 @@ export const getOwnerProductsApi = async (params = {}) => {
     return response.data
 }
 
+export const getOwnerCategoriesApi = async (params = {}) => {
+    const response = await axiosClient.get('/owner/categories', { params })
+    return response.data
+}
+
+export const createOwnerCategoryApi = async (payload) => {
+    const response = await axiosClient.post('/owner/categories', payload)
+    return response.data
+}
+
+export const updateOwnerCategoryApi = async (categoryId, payload) => {
+    const response = await axiosClient.put(`/owner/categories/${categoryId}`, payload)
+    return response.data
+}
+
+export const deleteOwnerCategoryApi = async (categoryId) => {
+    const response = await axiosClient.delete(`/owner/categories/${categoryId}`)
+    return response.data
+}
+
 export const getOwnerProductDetailApi = async (productId) => {
     const response = await axiosClient.get(`/owner/products/${productId}`)
     return response.data

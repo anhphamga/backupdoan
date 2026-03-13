@@ -270,6 +270,11 @@ export default function ProductDetailPage() {
     [canSubmit, product?.baseSalePrice]
   );
 
+  const canBuy = useMemo(
+    () => canSubmit && Number(product?.baseSalePrice || 0) > 0,
+    [canSubmit, product?.baseSalePrice]
+  );
+
   useEffect(() => {
     if (!product?._id) return;
     let mounted = true;
@@ -374,7 +379,7 @@ export default function ProductDetailPage() {
   };
 
   const badges = useMemo(() => {
-    const list = ["Co san"];
+    const list = ["Có sẵn"];
     if (isFreeSize) list.push("Free size");
     if (product?.isBestSeller) list.push("Best seller");
     if (product?.isNew) list.push("Mới");
@@ -510,7 +515,7 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-5 flex gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -518,7 +523,7 @@ export default function ProductDetailPage() {
                   setRentStartDate('');
                   setRentEndDate('');
                 }}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50"
               >
                 Hủy
               </button>

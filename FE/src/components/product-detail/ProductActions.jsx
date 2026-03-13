@@ -27,6 +27,15 @@ export default function ProductActions({
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
+            onClick={onBuy}
+            disabled={!canBuy || renting || buying}
+            className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {buying && <Spinner />}
+            Mua
+          </button>
+          <button
+            type="button"
             onClick={onRent}
             disabled={!canSubmit || renting || buying}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
