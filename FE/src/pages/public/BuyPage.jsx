@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "../../components/common/Header";
 import "../../style/pages/ProductPages.css";
 import { useTranslationDisplay } from "../../hooks/useTranslationDisplay";
@@ -130,19 +130,21 @@ const buildSidebarTree = (rawCategories = [], lang = "vi") => {
 
 const flattenCategories = (nodes = []) => {
   const result = [];
-  nodes.forEach((node) => {
-    result.push(node);
-    if (Array.isArray(node.children) && node.children.length > 0) {
-      node.children.forEach((child) => result.push(child));
-    }
-  });
+  const visit = (items = []) => {
+    items.forEach((node) => {
+      result.push(node);
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        visit(node.children);
+      }
+    });
+  };
+  visit(nodes);
   return result;
 };
 
 export default function BuyPage() {
-  const [lang, setLang] = useState(
-    typeof window !== "undefined" ? window.localStorage.getItem("lang") || "vi" : "vi"
-  );
+  const navigate = useNavigate();
+  const lang = "vi";
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [expanded, setExpanded] = useState({});
@@ -162,13 +164,10 @@ export default function BuyPage() {
   const { translateFields } = useTranslationDisplay(lang);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("lang", lang);
-    }
     if (typeof document !== "undefined") {
-      document.documentElement.lang = lang;
+      document.documentElement.lang = "vi";
     }
-  }, [lang]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -206,7 +205,7 @@ export default function BuyPage() {
       }
 
       const rawTexts = [
-        ...categoryTree.flatMap((cat) => [cat.displayName, ...(cat.children || []).map((c) => c.displayName)]),
+        ...flattenCategories(categoryTree).map((item) => item.displayName),
         ...products.flatMap((item) => [item?.name, item?.category]),
       ]
         .map((text) => String(text || "").trim())
@@ -239,6 +238,39 @@ export default function BuyPage() {
     if (!raw) return "";
     if (lang !== "en") return raw;
     return translatedTextMap[raw] || raw;
+  };
+
+  const renderCategoryNode = (category, depth = 0) => {
+    const hasChildren = category.children.length > 0;
+    const isOpen = Boolean(expanded[category.value]);
+
+    return (
+      <div className="catalog-cat-group" key={category.slug || category.value}>
+        <button
+          className={`catalog-cat-btn ${depth > 0 ? "catalog-cat-child" : ""} ${selectedCategory === category.value ? "active" : ""}`}
+          type="button"
+          onClick={() =>
+            hasChildren ? toggleGroup(category.value) : setSelectedCategory(category.value)
+          }
+          aria-label={hasChildren && !isOpen ? t.showChildren : t.hideChildren}
+          style={depth > 1 ? { paddingLeft: `${16 + depth * 14}px` } : undefined}
+        >
+          <span>{translateDisplay(category.displayName)}</span>
+          <span className="catalog-cat-meta">
+            <small>({category.count || 0})</small>
+            {hasChildren && (
+              <i className={`catalog-caret ${isOpen ? "open" : ""}`} aria-hidden="true" />
+            )}
+          </span>
+        </button>
+
+        {hasChildren && isOpen && (
+          <div className="catalog-cat-children">
+            {category.children.map((child) => renderCategoryNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -318,7 +350,7 @@ export default function BuyPage() {
 
   return (
     <div className="product-page">
-      <Header active="buy" lang={lang} setLang={setLang} />
+      <Header active="buy" />
 
       <main className="product-page-main">
         <div className="site-shell">
@@ -350,47 +382,7 @@ export default function BuyPage() {
               >
                 <span>{t.allCategories}</span>
               </button>
-              {categoryTree.map((category) => {
-                const hasChildren = category.children.length > 0;
-                const isOpen = Boolean(expanded[category.value]);
-                return (
-                  <div className="catalog-cat-group" key={category.slug || category.value}>
-                    <button
-                      className={`catalog-cat-btn ${selectedCategory === category.value ? "active" : ""}`}
-                      type="button"
-                      onClick={() =>
-                        hasChildren ? toggleGroup(category.value) : setSelectedCategory(category.value)
-                      }
-                      aria-label={hasChildren && !isOpen ? t.showChildren : t.hideChildren}
-                    >
-                      <span>{translateDisplay(category.displayName)}</span>
-                      <span className="catalog-cat-meta">
-                        <small>({category.count || 0})</small>
-                        {hasChildren && (
-                          <i className={`catalog-caret ${isOpen ? "open" : ""}`} aria-hidden="true" />
-                        )}
-                      </span>
-                    </button>
-
-                    {hasChildren && isOpen && (
-                      <div className="catalog-cat-children">
-                        {category.children.map((child) => (
-                          <button
-                            key={child.slug || child.value}
-                            className={`catalog-cat-btn catalog-cat-child ${selectedCategory === child.value ? "active" : ""
-                              }`}
-                            type="button"
-                            onClick={() => setSelectedCategory(child.value)}
-                          >
-                            <span>{translateDisplay(child.displayName)}</span>
-                            <small>({child.count || 0})</small>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {categoryTree.map((category) => renderCategoryNode(category))}
             </aside>
 
             <div className="catalog-content">
@@ -423,10 +415,10 @@ export default function BuyPage() {
                       </h3>
                       <p className="catalog-price">{p.priceText}</p>
                       <div className="catalog-actions">
-                        <button className="catalog-btn" type="button">
+                        <button className="catalog-btn" type="button" onClick={() => navigate(`/products/${p.id}`)}>
                           {t.rent}
                         </button>
-                        <button className="catalog-btn buy" type="button">
+                        <button className="catalog-btn buy" type="button" onClick={() => navigate(`/products/${p.id}`)}>
                           {t.buy}
                         </button>
                       </div>
