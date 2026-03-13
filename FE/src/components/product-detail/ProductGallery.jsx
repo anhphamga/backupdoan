@@ -98,7 +98,7 @@ export default function ProductGallery({
 
       {/* Thumbnails — mobile */}
       {safeImages.length > 1 && (
-        <div className="mt-3 flex gap-2 overflow-auto pb-1 md:hidden">
+        <div className="mt-4 flex gap-2 overflow-auto pb-1 md:hidden">
           {safeImages.map((img, idx) => (
             <button
               key={`${img.slice(0, 24)}-${idx}`}

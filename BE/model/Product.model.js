@@ -33,6 +33,10 @@ const productSchema = new mongoose.Schema({
     child: {
       type: String,
       default: ''
+    },
+    ancestors: {
+      type: [String],
+      default: []
     }
   },
   size: {

@@ -17,7 +17,8 @@ import {
     Settings,
     Shirt,
     Users,
-    Package
+    Package,
+    Folder
 } from 'lucide-react'
 import { cn } from '../../utils/ui.utils'
 import { useAuth } from '../../contexts/AuthContext'
@@ -27,6 +28,7 @@ const navItems = [
     { to: '/owner/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/owner/users', label: 'Users', icon: Users },
     { to: '/owner/products', label: 'Products', icon: Shirt },
+    { to: '/owner/categories', label: 'Categories', icon: Folder },
     { to: '/owner/inventory', label: 'Inventory', icon: Package },
     { to: '/owner/staff', label: 'Staff', icon: BadgeCheck },
     { to: '/owner/orders', label: 'Orders', icon: ReceiptText },
@@ -40,6 +42,7 @@ const pageTitleMap = {
     dashboard: 'Dashboard',
     users: 'Users',
     products: 'Products',
+    categories: 'Categories',
     inventory: 'Inventory',
     staff: 'Staff',
     'staff-calendar': 'Staff Calendar',
