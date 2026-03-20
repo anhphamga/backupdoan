@@ -777,6 +777,90 @@ exports.getOwnerSaleOrders = async (req, res) => {
   }
 };
 
+exports.getMySaleOrders = async (req, res) => {
+  try {
+    const customerId = req.user?.id;
+    const { status = '' } = req.query || {};
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
+    const normalizedStatus = String(status || '').trim();
+    const query = {
+      customerId,
+      orderType: 'Buy',
+    };
+
+    if (normalizedStatus && SALE_ORDER_ALLOWED_STATUSES.has(normalizedStatus)) {
+      query.status = normalizedStatus;
+    }
+
+    const orders = await SaleOrder.find(query)
+      .populate('history.updatedBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    const attachedOrders = await attachSaleOrderItems(orders);
+
+    return res.json({
+      success: true,
+      data: attachedOrders.map((order) => mapSaleOrderForOwner(order)),
+    });
+  } catch (error) {
+    console.error('Get my sale orders error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Khong the lay lich su don mua luc nay.',
+    });
+  }
+};
+
+exports.getMySaleOrderById = async (req, res) => {
+  try {
+    const customerId = req.user?.id;
+    const { id } = req.params;
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
+    const order = await SaleOrder.findOne({
+      _id: id,
+      customerId,
+      orderType: 'Buy',
+    })
+      .populate('customerId', 'name phone email')
+      .populate('staffId', 'name phone email')
+      .populate('history.updatedBy', 'name email');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Khong tim thay don mua.',
+      });
+    }
+
+    const [attachedOrder] = await attachSaleOrderItems([order]);
+
+    return res.json({
+      success: true,
+      data: mapSaleOrderForOwner(attachedOrder),
+    });
+  } catch (error) {
+    console.error('Get my sale order detail error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Khong the lay chi tiet don mua luc nay.',
+    });
+  }
+};
+
 exports.updateOwnerSaleOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;

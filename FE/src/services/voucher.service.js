@@ -5,6 +5,7 @@ import {
   getVouchersRequest,
   toggleVoucherStatusRequest,
   updateVoucherRequest,
+  validateVoucherRequest,
 } from '../api/voucher.api'
 
 export const getMyVouchersApi = async (params = {}) => {
@@ -34,5 +35,10 @@ export const updateVoucherApi = async (voucherId, payload) => {
 
 export const toggleVoucherStatusApi = async (voucherId) => {
   const response = await toggleVoucherStatusRequest(voucherId)
+  return response.data
+}
+
+export const validateVoucherApi = async (payload) => {
+  const response = await validateVoucherRequest(payload)
   return response.data
 }

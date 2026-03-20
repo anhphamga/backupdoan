@@ -1,4 +1,5 @@
 const Alert = require('./Alert.model');
+const AuditLog = require('./AuditLog.model');
 const Blog = require('./Blog.model');
 const Category = require('./Category.model');
 const Collateral = require('./Collateral.model');
@@ -12,6 +13,7 @@ const Product = require('./Product.model');
 const ProductInstance = require('./ProductInstance.model');
 const RentOrder = require('./RentOrder.model');
 const RentOrderItem = require('./RentOrderItem.model');
+const Role = require('./Role.model');
 const ReturnRecord = require('./ReturnRecord.model');
 const SaleOrder = require('./SaleOrder.model');
 const SaleOrderItem = require('./SaleOrderItem.model');
@@ -22,6 +24,7 @@ const Voucher = require('./Voucher.model');
 const syncModelIndexes = async () => {
     await Promise.all([
         Alert.syncIndexes(),
+        AuditLog.syncIndexes(),
         Blog.syncIndexes(),
         Category.syncIndexes(),
         Collateral.syncIndexes(),
@@ -35,6 +38,7 @@ const syncModelIndexes = async () => {
         ProductInstance.syncIndexes(),
         RentOrder.syncIndexes(),
         RentOrderItem.syncIndexes(),
+        Role.syncIndexes(),
         ReturnRecord.syncIndexes(),
         SaleOrder.syncIndexes(),
         SaleOrderItem.syncIndexes(),
@@ -46,6 +50,7 @@ const syncModelIndexes = async () => {
 
 module.exports = {
     Alert,
+    AuditLog,
     Blog,
     Category,
     Collateral,
@@ -59,6 +64,7 @@ module.exports = {
     ProductInstance,
     RentOrder,
     RentOrderItem,
+    Role,
     ReturnRecord,
     SaleOrder,
     SaleOrderItem,

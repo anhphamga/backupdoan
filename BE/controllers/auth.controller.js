@@ -4,10 +4,13 @@ const User = require('../model/User.model');
 const { signAccessToken } = require('../utils/jwt');
 const { hasGoogleClientId, verifyGoogleIdToken } = require('../utils/googleAuth');
 const { hasSmtpConfig, sendResetPasswordEmail } = require('../utils/mailer');
+const { isValidEmail, isValidPhone, normalizeEmail, normalizePhone } = require('../utils/guestVerification');
+const { resolveUserAccess } = require('../services/accessControl.service');
 
-const sanitizeUser = (user) => ({
+const sanitizeUser = (user, access = null) => ({
   id: user._id,
   role: user.role,
+  roleLevel: Number(user.roleLevel || access?.roleLevel || 0),
   name: user.name,
   phone: user.phone,
   email: user.email,
@@ -19,7 +22,13 @@ const sanitizeUser = (user) => ({
   gender: user.gender,
   dateOfBirth: user.dateOfBirth,
   createdAt: user.createdAt,
-  updatedAt: user.updatedAt
+  updatedAt: user.updatedAt,
+  permissions: access?.permissions || [],
+  access: access || {
+    role: user.role,
+    roleLevel: Number(user.roleLevel || 0),
+    permissions: [],
+  }
 });
 
 const handleDuplicateKeyError = (error, res) => {
@@ -29,7 +38,8 @@ const handleDuplicateKeyError = (error, res) => {
 
   const duplicateField = Object.keys(error?.keyPattern || {})[0];
   const messageByField = {
-    email: 'Email already exists'
+    email: 'Email đã được sử dụng',
+    phone: 'Số điện thoại đã được sử dụng'
   };
 
   return res.status(409).json({
@@ -37,6 +47,8 @@ const handleDuplicateKeyError = (error, res) => {
     message: messageByField[duplicateField] || 'Duplicate data'
   });
 };
+
+const buildSanitizedUser = async (user) => sanitizeUser(user, await resolveUserAccess(user));
 
 const signup = async (req, res) => {
   try {
@@ -49,17 +61,39 @@ const signup = async (req, res) => {
       });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedPhone = phone.trim();
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = normalizePhone(phone);
 
-    const existingEmail = await User.findOne({
-      email: normalizedEmail,
-      authProvider: 'local'
-    });
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email không hợp lệ'
+      });
+    }
+
+    if (!isValidPhone(normalizedPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Số điện thoại không hợp lệ'
+      });
+    }
+
+    const [existingEmail, existingPhone] = await Promise.all([
+      User.findOne({ email: normalizedEmail }),
+      User.findOne({ phone: normalizedPhone })
+    ]);
+
     if (existingEmail) {
       return res.status(409).json({
         success: false,
-        message: 'Email already exists'
+        message: 'Email đã được sử dụng'
+      });
+    }
+
+    if (existingPhone) {
+      return res.status(409).json({
+        success: false,
+        message: 'Số điện thoại đã được sử dụng'
       });
     }
 
@@ -86,7 +120,7 @@ const signup = async (req, res) => {
       message: 'Signup successful',
       data: {
         token,
-        user: sanitizeUser(user)
+        user: await buildSanitizedUser(user)
       }
     });
   } catch (error) {
@@ -114,8 +148,8 @@ const login = async (req, res) => {
     }
 
     const hasEmail = typeof email === 'string' && email.trim();
-    const normalizedEmail = hasEmail ? email.trim().toLowerCase() : null;
-    const normalizedPhone = typeof phone === 'string' ? phone.trim() : null;
+    const normalizedEmail = hasEmail ? normalizeEmail(email) : null;
+    const normalizedPhone = typeof phone === 'string' ? normalizePhone(phone) : null;
 
     const loginQuery = {
       authProvider: 'local'
@@ -174,7 +208,7 @@ const login = async (req, res) => {
       message: 'Login successful',
       data: {
         token,
-        user: sanitizeUser(user)
+        user: await buildSanitizedUser(user)
       }
     });
   } catch (error) {
@@ -220,10 +254,7 @@ const googleLogin = async (req, res) => {
       });
     }
 
-    let user = await User.findOne({
-      email,
-      authProvider: 'google'
-    });
+    let user = await User.findOne({ email });
 
     if (!user) {
       const randomPassword = crypto.randomBytes(32).toString('hex');
@@ -249,9 +280,6 @@ const googleLogin = async (req, res) => {
       }
 
       const updates = {};
-      if (user.authProvider !== 'google') {
-        updates.authProvider = 'google';
-      }
       if (typeof user.phone === 'string' && user.phone.startsWith('google_')) {
         updates.phone = null;
       }
@@ -277,7 +305,7 @@ const googleLogin = async (req, res) => {
       message: 'Google login successful',
       data: {
         token,
-        user: sanitizeUser(user)
+        user: await buildSanitizedUser(user)
       }
     });
   } catch (error) {
@@ -433,7 +461,7 @@ const getCurrentUser = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Get profile successful',
-      data: sanitizeUser(user)
+      data: await buildSanitizedUser(user)
     });
   } catch (error) {
     return res.status(500).json({

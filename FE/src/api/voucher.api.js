@@ -23,3 +23,7 @@ export const updateVoucherRequest = (voucherId, payload) => {
 export const toggleVoucherStatusRequest = (voucherId) => {
   return axiosClient.patch(`/vouchers/${voucherId}/toggle-status`)
 }
+
+export const validateVoucherRequest = (payload) => {
+  return axiosClient.post('/vouchers/validate', payload)
+}
