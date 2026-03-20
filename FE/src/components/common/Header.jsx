@@ -136,7 +136,7 @@ export default function Header({ active = "", onSectionNavigate }) {
                       {LABELS.dashboard}
                     </Link>
                   )}
-                  <Link to="/rental/history" className="site-account-item" onClick={() => setMenuOpen(false)}>
+                  <Link to="/orders/history" className="site-account-item" onClick={() => setMenuOpen(false)}>
                     {LABELS.orderHistory}
                   </Link>
                   <Link to="/my-vouchers" className="site-account-item" onClick={() => setMenuOpen(false)}>

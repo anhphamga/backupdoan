@@ -2,6 +2,8 @@ const Product = require('../model/Product.model');
 const ProductInstance = require('../model/ProductInstance.model');
 const RentOrderItem = require('../model/RentOrderItem.model');
 const SaleOrderItem = require('../model/SaleOrderItem.model');
+const { hasPermission } = require('../services/accessControl.service');
+const { writeAuditLog } = require('../services/auditLog.service');
 const { hasCloudinaryConfig, uploadImageBuffer } = require('../utils/cloudinary');
 const {
   getRequestLang,
@@ -1341,6 +1343,7 @@ const updateProductInstance = async (req, res) => {
     } = req.body;
 
     const instance = await ProductInstance.findById(id);
+    const canUpdateCondition = hasPermission(req.access, 'inventory.item.update_condition');
 
     if (!instance) {
       return res.status(404).json({
@@ -1350,6 +1353,15 @@ const updateProductInstance = async (req, res) => {
     }
 
     // Cập nhật các trường được gửi lên
+    const before = instance.toObject();
+
+    if ((conditionLevel !== undefined || conditionScore !== undefined) && !canUpdateCondition) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden - missing permission'
+      });
+    }
+
     if (conditionLevel) instance.conditionLevel = conditionLevel;
     if (conditionScore !== undefined) instance.conditionScore = conditionScore;
     if (lifecycleStatus) instance.lifecycleStatus = lifecycleStatus;
@@ -1362,6 +1374,30 @@ const updateProductInstance = async (req, res) => {
     // Populate để trả về
     const updatedInstance = await ProductInstance.findById(id)
       .populate('productId', 'name images category');
+
+    await writeAuditLog({
+      req,
+      user: req.user,
+      action: 'inventory.item.update_condition',
+      resource: 'ProductInstance',
+      resourceId: updatedInstance._id,
+      before: {
+        conditionLevel: before.conditionLevel,
+        conditionScore: before.conditionScore,
+        lifecycleStatus: before.lifecycleStatus,
+        currentRentPrice: before.currentRentPrice,
+        currentSalePrice: before.currentSalePrice,
+        note: before.note,
+      },
+      after: {
+        conditionLevel: updatedInstance.conditionLevel,
+        conditionScore: updatedInstance.conditionScore,
+        lifecycleStatus: updatedInstance.lifecycleStatus,
+        currentRentPrice: updatedInstance.currentRentPrice,
+        currentSalePrice: updatedInstance.currentSalePrice,
+        note: updatedInstance.note,
+      },
+    });
 
     res.json({
       success: true,
