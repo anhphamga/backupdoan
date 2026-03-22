@@ -903,9 +903,10 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
       order.staffId = req.user?.id || null;
     }
     order.history = Array.isArray(order.history) ? order.history : [];
+    const actorRole = String(req.user?.role || '').trim().toLowerCase();
     order.history.push({
       status: normalizedStatus,
-      action: 'owner_update_status',
+      action: actorRole === 'staff' ? 'staff_update_status' : 'owner_update_status',
       description: `Cap nhat trang thai sang ${normalizedStatus}`,
       updatedBy: req.user?.id || null,
       updatedAt: new Date(),

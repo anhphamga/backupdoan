@@ -1,12 +1,15 @@
 import { ArrowRight, TrendingUp } from 'lucide-react';
 import { dashboardStats } from '../mockData';
 import { can } from '../../utils/access-control';
+import { useTranslate } from '../../hooks/useTranslate';
 import SectionCard from '../components/SectionCard';
 import StatCard from '../components/StatCard';
 
 const formatMoney = (value) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
 
 export default function DashboardPage({ user }) {
+  const { t } = useTranslate();
+
   if (user?.role === 'owner') {
     const ownerStats = dashboardStats.owner;
     const totalInventory = ownerStats.inventoryChart.reduce((sum, item) => sum + item.value, 0);
@@ -14,14 +17,14 @@ export default function DashboardPage({ user }) {
     return (
       <div className="space-y-6">
         <div className="grid gap-5 lg:grid-cols-4">
-          <StatCard label="Daily Revenue" value={formatMoney(ownerStats.dailyRevenue)} hint="Compared to yesterday +12%" accent="from-slate-950 via-slate-800 to-slate-700" />
-          <StatCard label="Monthly Revenue" value={formatMoney(ownerStats.monthlyRevenue)} hint="Quarter pace is ahead of plan" accent="from-[#1f2937] via-[#374151] to-[#4b5563]" />
-          <StatCard label="Orders" value={ownerStats.totalOrders} hint="Across rent and sale channels" accent="from-[#1d4ed8] via-[#2563eb] to-[#38bdf8]" />
-          <StatCard label="Active Rentals" value={ownerStats.activeRentals} hint="Currently out in circulation" accent="from-[#0f766e] via-[#10b981] to-[#84cc16]" />
+          <StatCard label={t('admin.dashboard.owner.dailyRevenue')} value={formatMoney(ownerStats.dailyRevenue)} hint={t('admin.dashboard.owner.dailyHint')} accent="from-slate-950 via-slate-800 to-slate-700" />
+          <StatCard label={t('admin.dashboard.owner.monthlyRevenue')} value={formatMoney(ownerStats.monthlyRevenue)} hint={t('admin.dashboard.owner.monthlyHint')} accent="from-[#1f2937] via-[#374151] to-[#4b5563]" />
+          <StatCard label={t('admin.dashboard.owner.orders')} value={ownerStats.totalOrders} hint={t('admin.dashboard.owner.ordersHint')} accent="from-[#1d4ed8] via-[#2563eb] to-[#38bdf8]" />
+          <StatCard label={t('admin.dashboard.owner.activeRentals')} value={ownerStats.activeRentals} hint={t('admin.dashboard.owner.rentalsHint')} accent="from-[#0f766e] via-[#10b981] to-[#84cc16]" />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <SectionCard eyebrow="Performance" title="Top rented products" action={<button type="button" className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">View catalog <ArrowRight className="h-4 w-4" /></button>}>
+          <SectionCard eyebrow={t('admin.dashboard.owner.performance')} title={t('admin.dashboard.owner.topProducts')} action={<button type="button" className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{t('admin.dashboard.owner.viewCatalog')} <ArrowRight className="h-4 w-4" /></button>}>
             <div className="space-y-4">
               {ownerStats.topProducts.map((item, index) => (
                 <div key={item.id} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
@@ -31,19 +34,19 @@ export default function DashboardPage({ user }) {
                     </div>
                     <div>
                       <p className="font-semibold text-slate-950">{item.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{item.rentals} rentals this month</p>
+                      <p className="mt-1 text-sm text-slate-500">{item.rentals} {t('admin.dashboard.owner.rentalsThisMonth')}</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-slate-950">{item.utilization}%</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-400">utilization</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-400">{t('admin.dashboard.owner.utilization')}</p>
                   </div>
                 </div>
               ))}
             </div>
           </SectionCard>
 
-          <SectionCard eyebrow="Inventory" title="Status breakdown">
+          <SectionCard eyebrow={t('admin.dashboard.owner.inventoryEyebrow')} title={t('admin.dashboard.owner.inventoryBreakdown')}>
             <div className="space-y-4">
               {ownerStats.inventoryChart.map((item) => {
                 const width = `${Math.max((item.value / totalInventory) * 100, 8)}%`;
@@ -71,12 +74,12 @@ export default function DashboardPage({ user }) {
   return (
     <div className="space-y-6">
       <SectionCard
-        eyebrow="Today"
-        title="Operational focus"
+        eyebrow={t('admin.dashboard.staff.today')}
+        title={t('admin.dashboard.staff.focus')}
         action={
           <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
             <TrendingUp className="h-4 w-4" />
-            Shift is on track
+            {t('admin.dashboard.staff.shiftOnTrack')}
           </div>
         }
       >
@@ -94,7 +97,7 @@ export default function DashboardPage({ user }) {
         </div>
       </SectionCard>
 
-      <SectionCard eyebrow="Quick actions" title="What you can do right now">
+      <SectionCard eyebrow={t('admin.dashboard.staff.quickActions')} title={t('admin.dashboard.staff.canDoNow')}>
         <div className="grid gap-4 lg:grid-cols-3">
           {staffStats.quickActions
             .filter((item) => can(user, item.permission))
@@ -109,3 +112,4 @@ export default function DashboardPage({ user }) {
     </div>
   );
 }
+
