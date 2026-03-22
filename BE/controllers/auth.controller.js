@@ -351,7 +351,7 @@ const forgotPassword = async (req, res) => {
 
     const genericResponse = {
       success: true,
-      message: 'Náº¿u email tá»“n táº¡i, hÆ°á»›ng dáº«n Ä‘áº·t láº¡i máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c gá»­i.'
+      message: 'Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.'
     };
 
     if (!user) {
@@ -381,7 +381,7 @@ const forgotPassword = async (req, res) => {
     if (process.env.NODE_ENV !== 'production') {
       return res.status(200).json({
         success: true,
-        message: 'SMTP chÆ°a cáº¥u hÃ¬nh. Tráº£ token/link Ä‘á»ƒ test á»Ÿ mÃ´i trÆ°á»ng dev.',
+        message: 'SMTP chưa cấu hình. Trả token/link để test ở môi trường dev.',
         token: rawToken,
         resetLink
       });
@@ -389,12 +389,12 @@ const forgotPassword = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh trÃªn server'
+      message: 'SMTP chưa được cấu hình trên server'
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'KhÃ´ng thá»ƒ xá»­ lÃ½ yÃªu cáº§u quÃªn máº­t kháº©u',
+      message: 'Không thể xử lý yêu cầu quên mật khẩu',
       error: error.message
     });
   }
@@ -429,7 +429,7 @@ const resetPassword = async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'Token khÃ´ng há»£p lá»‡ hoáº·c Ä‘Ã£ háº¿t háº¡n'
+        message: 'Token không hợp lệ hoặc đã hết hạn'
       });
     }
 
@@ -440,12 +440,12 @@ const resetPassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Äáº·t láº¡i máº­t kháº©u thÃ nh cÃ´ng'
+      message: 'Đặt lại mật khẩu thành công'
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'KhÃ´ng thá»ƒ Ä‘áº·t láº¡i máº­t kháº©u',
+      message: 'Không thể đặt lại mật khẩu',
       error: error.message
     });
   }

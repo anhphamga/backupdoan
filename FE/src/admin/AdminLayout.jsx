@@ -5,10 +5,12 @@ import AdminHeader from './components/AdminHeader';
 import { PAGE_TITLES } from './config';
 import { mockCurrentUserByRole } from './mockData';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslate } from '../hooks/useTranslate';
 
 export default function AdminLayout() {
   const location = useLocation();
   const { user } = useAuth();
+  const { t } = useTranslate();
   const [collapsed, setCollapsed] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
 
@@ -21,7 +23,8 @@ export default function AdminLayout() {
     return <Navigate to="/" replace />;
   }
 
-  const title = PAGE_TITLES[location.pathname] || 'Admin Dashboard';
+  const titleKey = PAGE_TITLES[location.pathname];
+  const title = t(titleKey, t('pageTitles.adminDashboard'));
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,#f6efe1,transparent_26%),radial-gradient(circle_at_top_right,#eef4ff,transparent_24%),linear-gradient(180deg,#f8f4ec,#f8fafc)] text-slate-900">

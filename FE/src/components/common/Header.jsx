@@ -5,7 +5,7 @@ import logo from "../../assets/logo/logo.png";
 import { useBuyCart } from "../../contexts/BuyCartContext";
 import { useRentalCart } from "../../contexts/RentalCartContext";
 import { useAuth } from "../../hooks/useAuth";
-import { getRouteByRole } from "../../utils/auth";
+import { getRouteByRole, isDashboardRole } from "../../utils/auth";
 import "../../style/components/Header.css";
 
 const LABELS = {
@@ -127,7 +127,7 @@ export default function Header({ active = "", onSectionNavigate }) {
 
               {menuOpen && (
                 <div className="site-account-menu">
-                  {(user?.role === "owner" || user?.role === "staff") && (
+                  {isDashboardRole(user?.role) && (
                     <Link
                       to={dashboardPath}
                       className="site-account-item"

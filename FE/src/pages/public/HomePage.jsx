@@ -177,18 +177,6 @@ const year = new Date().getFullYear();
 const AUTO_SLIDE_MS = 5000;
 const CATEGORY_SLIDE_MS = 2800;
 const HOMEPAGE_PRODUCT_LIMIT = 8;
-const SECTION_IDS = ["rent", "buy", "fitting", "packages", "blog", "promo", "contact"];
-const CATEGORY_TYPE_LABELS = {
-  rent: "Cho thuê",
-  sale_or_rent: "Bán / Thuê",
-  service: "Dịch vụ",
-};
-const CATEGORY_LOAD_ERROR = "Không tải được danh mục từ API, đang dùng dữ liệu dự phòng.";
-const FALLBACK_BLOG_POSTS = ["blog.p1", "blog.p2", "blog.p3"].map((prefix, index) => ({
-  id: `blog-fallback-${index + 1}`,
-  titleKey: `${prefix}.t`,
-  excerptKey: `${prefix}.d`,
-}));
 const CONTACT_INFO = {
   phoneDisplay: "0898 199 099",
   phoneHref: "tel:0898199099",
@@ -198,191 +186,6 @@ const CONTACT_INFO = {
   instagramLabel: "@inhere_trangphuchoian",
   instagramHref: "https://www.instagram.com/inhere_trangphuchoian/",
 };
-const PRODUCT_CATEGORIES = [
-  {
-    displayName: "Áo Dài Cho Thuê",
-    slug: "ao-dai-cho-thue",
-    type: "rent",
-    count: 100,
-    children: [],
-  },
-  {
-    displayName: "Áo Dài Bà Sui",
-    slug: "ao-dai-ba-sui",
-    type: "rent",
-    count: 2,
-    children: [],
-  },
-  {
-    displayName: "Áo Dài Bé",
-    slug: "ao-dai-be",
-    type: "rent",
-    count: 1,
-    children: [
-      {
-        displayName: "Áo Dài Bé Trai",
-        slug: "ao-dai-be-trai",
-        type: "rent",
-        count: 1,
-        children: [],
-      },
-    ],
-  },
-  {
-    displayName: "Áo Dài Cách Tân Cho Thuê",
-    slug: "ao-dai-cach-tan-cho-thue",
-    type: "rent",
-    count: 76,
-    children: [],
-  },
-  {
-    displayName: "Áo Dài Cưới",
-    slug: "ao-dai-cuoi",
-    type: "sale_or_rent",
-    count: 6,
-    children: [],
-  },
-  {
-    displayName: "Áo Dài Gấm",
-    slug: "ao-dai-gam",
-    type: "rent",
-    count: 17,
-    children: [
-      { displayName: "Gấm Hoa", slug: "gam-hoa", type: "rent", count: 10, children: [] },
-      { displayName: "Gấm Thọ", slug: "gam-tho", type: "rent", count: 6, children: [] },
-    ],
-  },
-  {
-    displayName: "Áo Dài Suôn Lụa Trơn",
-    slug: "ao-dai-suon-lua-tron",
-    type: "rent",
-    count: 17,
-    children: [],
-  },
-  {
-    displayName: "Áo Dài Thiết Kế Cho Thuê",
-    slug: "ao-dai-thiet-ke-cho-thue",
-    type: "rent",
-    count: 16,
-    children: [{ displayName: "In Hoa Văn", slug: "in-hoa-van", type: "rent", count: 4, children: [] }],
-  },
-  {
-    displayName: "Áo Dài Tơ Thêu",
-    slug: "ao-dai-to-theu",
-    type: "rent",
-    count: 19,
-    children: [],
-  },
-  {
-    displayName: "Áo Dài Cao Cấp",
-    slug: "ao-dai-cao-cap",
-    type: "sale_or_rent",
-    count: 3,
-    children: [],
-  },
-  {
-    displayName: "Áo Dài Nam",
-    slug: "ao-dai-nam",
-    type: "sale_or_rent",
-    count: 5,
-    children: [],
-  },
-  {
-    displayName: "Áo Dài Truyền Thống Cho Thuê",
-    slug: "ao-dai-truyen-thong-cho-thue",
-    type: "rent",
-    count: 13,
-    children: [],
-  },
-  {
-    displayName: "Cho Thuê Váy Đầm Hội An",
-    slug: "cho-thue-vay-dam-hoi-an",
-    type: "rent",
-    count: 37,
-    children: [
-      { displayName: "Váy Đi Tiệc", slug: "vay-di-tiec", type: "rent", count: 3, children: [] },
-      { displayName: "Váy Vintage", slug: "vay-vintage", type: "rent", count: 11, children: [] },
-      { displayName: "Yếm Chụp Ảnh", slug: "yem-chup-anh", type: "rent", count: 21, children: [] },
-    ],
-  },
-  {
-    displayName: "Cho Thuê Vest Hội An",
-    slug: "cho-thue-vest-hoi-an",
-    type: "rent",
-    count: 14,
-    children: [
-      { displayName: "Vest Nam", slug: "vest-nam", type: "rent", count: 12, children: [] },
-      { displayName: "Phụ Kiện Vest", slug: "phu-kien-vest", type: "rent", count: 2, children: [] },
-    ],
-  },
-  {
-    displayName: "Cổ Phục Cho Thuê Tại Hội An",
-    slug: "co-phuc-cho-thue-tai-hoi-an",
-    type: "rent",
-    count: 16,
-    children: [
-      { displayName: "Áo Tấc", slug: "ao-tac", type: "rent", count: 11, children: [] },
-      { displayName: "Nhật Bình", slug: "nhat-binh", type: "rent", count: 4, children: [] },
-    ],
-  },
-  {
-    displayName: "Đồ Cho Bé Cho Thuê Hội An",
-    slug: "do-cho-be-cho-thue-hoi-an",
-    type: "rent",
-    count: 10,
-    children: [
-      { displayName: "Bé Gái", slug: "be-gai", type: "rent", count: 7, children: [] },
-      { displayName: "Bé Trai", slug: "be-trai", type: "rent", count: 3, children: [] },
-    ],
-  },
-  {
-    displayName: "Gói Chụp Ảnh",
-    slug: "goi-chup-anh",
-    type: "service",
-    count: 28,
-    children: [],
-  },
-  {
-    displayName: "Make Up",
-    slug: "make-up",
-    type: "service",
-    count: 3,
-    children: [],
-  },
-  {
-    displayName: "Phụ Kiện Chụp Ảnh Cho Thuê",
-    slug: "phu-kien-chup-anh-cho-thue",
-    type: "rent",
-    count: 83,
-    children: [
-      { displayName: "Băng Đô", slug: "bang-do", type: "rent", count: 0, children: [] },
-      { displayName: "Nón", slug: "non", type: "rent", count: 0, children: [] },
-      { displayName: "Quạt", slug: "quat", type: "rent", count: 0, children: [] },
-      { displayName: "Túi Giỏ", slug: "tui-gio", type: "rent", count: 0, children: [] },
-    ],
-  },
-  {
-    displayName: "Quần Áo Dài",
-    slug: "quan-ao-dai",
-    type: "sale_or_rent",
-    count: 1,
-    children: [],
-  },
-  {
-    displayName: "Sửa Đồ",
-    slug: "sua-do",
-    type: "service",
-    count: 3,
-    children: [],
-  },
-  {
-    displayName: "Váy Cưới",
-    slug: "vay-cuoi",
-    type: "sale_or_rent",
-    count: 1,
-    children: [],
-  },
-];
 
 const Homepage = ({ initialSection = "" }) => {
   const navigate = useNavigate();
@@ -579,7 +382,7 @@ const Homepage = ({ initialSection = "" }) => {
         setCategoriesLoading(true);
         setCategoriesError("");
 
-        const response = await fetch("/api/categories?lang=vi");
+        const response = await fetch("/api/categories");
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -629,17 +432,25 @@ const Homepage = ({ initialSection = "" }) => {
         setBuyLoading(true);
         setFittingLoading(true);
 
-        // Hai khu vực dùng cùng một nguồn dữ liệu nên chỉ cần gọi một lần.
-        const response = await fetch("/api/products?purpose=all&limit=200");
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        const [buyRes, fittingRes] = await Promise.all([
+          fetch("/api/products?purpose=all&limit=200"),
+          fetch("/api/products?purpose=all&limit=200"),
+        ]);
+
+        if (buyRes.ok) {
+          const buyPayload = await buyRes.json();
+          const buyData = Array.isArray(buyPayload?.data) ? buyPayload.data : [];
+          if (isMounted) {
+            setBuyProducts(buyData);
+          }
         }
 
-        const payload = await response.json();
-        const productData = Array.isArray(payload?.data) ? payload.data : [];
-        if (isMounted) {
-          setBuyProducts(productData);
-          setFittingProducts(productData);
+        if (fittingRes.ok) {
+          const fittingPayload = await fittingRes.json();
+          const fittingData = Array.isArray(fittingPayload?.data) ? fittingPayload.data : [];
+          if (isMounted) {
+            setFittingProducts(fittingData);
+          }
         }
       } catch (error) {
         if (isMounted) {
@@ -705,7 +516,7 @@ const Homepage = ({ initialSection = "" }) => {
       return;
     }
 
-    const sectionIds = SECTION_IDS;
+    const sectionIds = ["rent", "buy", "fitting", "packages", "blog", "promo", "contact"];
 
     const handleScroll = () => {
       const offset = 130; // gần bằng chiều cao header + nav
@@ -853,12 +664,11 @@ const Homepage = ({ initialSection = "" }) => {
     .slice(0, HOMEPAGE_PRODUCT_LIMIT)
     .map(mapProductCard);
 
-  const fallbackBlogPosts = FALLBACK_BLOG_POSTS.map((post) => ({
-    id: post.id,
-    title: t(lang, post.titleKey),
-    excerpt: t(lang, post.excerptKey),
-    thumbnail: "",
-  }));
+  const fallbackBlogPosts = [
+    { id: "blog-fallback-1", title: t(lang, "blog.p1.t"), excerpt: t(lang, "blog.p1.d"), thumbnail: "" },
+    { id: "blog-fallback-2", title: t(lang, "blog.p2.t"), excerpt: t(lang, "blog.p2.d"), thumbnail: "" },
+    { id: "blog-fallback-3", title: t(lang, "blog.p3.t"), excerpt: t(lang, "blog.p3.d"), thumbnail: "" },
+  ];
 
   const displayedBlogs =
     blogs.length > 0
@@ -916,7 +726,7 @@ const Homepage = ({ initialSection = "" }) => {
       />
       {false && (
         <>
-          {/* Phần đầu trang cũ */}
+          {/* HEADER */}
           <header className="header">
             <div className="container header-row">
               <a
@@ -1016,7 +826,7 @@ const Homepage = ({ initialSection = "" }) => {
                 )}
               </div>
             </div>
-            {/* Thanh điều hướng cũ */}
+            {/* NAVBAR */}
             <nav className="nav" aria-label="Primary navigation">
               <div className="container nav-row">
                 <div className="nav-left">
@@ -1128,7 +938,7 @@ const Homepage = ({ initialSection = "" }) => {
         </>
       )}
 
-      {/* Cụm banner chính */}
+      {/* HERO SLIDER */}
       <section className="hero" id="top">
         <div
           className="slides"
@@ -1397,7 +1207,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Nhóm danh mục nổi bật */}
+      {/* FEATURED CATEGORIES */}
       <section id="categories">
         <div className="container">
           <h2 className="section-title">
@@ -1483,7 +1293,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Nhóm sản phẩm thuê */}
+      {/* RENT PRODUCTS */}
       <section className="soft" id="rent">
         <div className="container">
           <div className="row-head">
@@ -1540,7 +1350,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Nhóm sản phẩm mua */}
+      {/* BUY PRODUCTS */}
       <section id="buy">
         <div className="container">
           <div className="row-head">
@@ -1591,7 +1401,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Nhóm váy đầm cho thuê */}
+      {/* FITTING PRODUCTS */}
       <section className="soft" id="fitting">
         <div className="container">
           <div className="row-head fitting-head">
@@ -1643,7 +1453,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Nhóm gói dịch vụ */}
+      {/* PACKAGES */}
       <section id="packages">
         <div className="container">
           <h2 className="section-title">
@@ -1700,7 +1510,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Nhóm đánh giá khách hàng */}
+      {/* TESTIMONIALS */}
       <section className="soft" id="reviews">
         <div className="container">
           <h2 className="section-title">
@@ -1733,7 +1543,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Nhóm bài viết */}
+      {/* BLOG */}
       <section id="blog">
         <div className="container">
           <div className="row-head">
@@ -1779,7 +1589,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Nhóm ưu đãi và liên hệ */}
+      {/* PROMO / CONTACT */}
       <section className="soft" id="promo">
         <div className="container">
           <h2 className="section-title">
@@ -1850,7 +1660,7 @@ const Homepage = ({ initialSection = "" }) => {
         </div>
       </section>
 
-      {/* Chân trang */}
+      {/* FOOTER */}
       <footer>
         <div className="container">
           <div className="footer-grid">

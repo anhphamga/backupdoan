@@ -1,15 +1,17 @@
 import { can } from '../../utils/access-control';
+import { useTranslate } from '../../hooks/useTranslate';
 import StatusBadge from './StatusBadge';
 
 const actionMatrix = {
-  Deposited: { label: 'Confirm Order', permission: 'orders_rent.order.confirm' },
-  Confirmed: { label: 'Pickup', permission: 'orders_rent.pickup.complete' },
-  Renting: { label: 'Process Return', permission: 'orders_rent.return.process' },
-  Late: { label: 'Apply Penalty', permission: 'orders_rent.penalty.apply' },
-  NoShow: { label: 'Mark No-show', permission: 'orders_rent.no_show.mark' },
+  Deposited: { labelKey: 'admin.table.confirmOrder', permission: 'orders_rent.order.confirm' },
+  Confirmed: { labelKey: 'admin.table.pickup', permission: 'orders_rent.pickup.complete' },
+  Renting: { labelKey: 'admin.table.processReturn', permission: 'orders_rent.return.process' },
+  Late: { labelKey: 'admin.table.applyPenalty', permission: 'orders_rent.penalty.apply' },
+  NoShow: { labelKey: 'admin.table.markNoShow', permission: 'orders_rent.no_show.mark' },
 };
 
 export default function OrderCard({ user, order, onSelect }) {
+  const { t } = useTranslate();
   const action = actionMatrix[order.status];
   const enabled = action ? can(user, action.permission) : false;
 
@@ -26,26 +28,27 @@ export default function OrderCard({ user, order, onSelect }) {
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-slate-50 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Rental period</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-slate-400">{t('admin.table.rentalPeriod')}</p>
           <p className="mt-2 text-sm font-medium text-slate-900">{order.rentalPeriod}</p>
         </div>
         <div className="rounded-2xl bg-slate-50 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-400">Payment</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-slate-400">{t('admin.table.payment')}</p>
           <p className="mt-2 text-sm font-medium text-slate-900">{order.deposit.toLocaleString('vi-VN')}đ / {order.remaining.toLocaleString('vi-VN')}đ</p>
         </div>
       </div>
       <div className="mt-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">Assigned to {order.assignedStaff}</p>
+        <p className="text-sm text-slate-500">{t('admin.table.assignedTo')} {order.assignedStaff}</p>
         {action ? (
           <button
             type="button"
             disabled={!enabled}
             className={`rounded-2xl px-4 py-2 text-sm font-semibold ${enabled ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'}`}
           >
-            {action.label}
+            {t(action.labelKey)}
           </button>
         ) : null}
       </div>
     </article>
   );
 }
+

@@ -1,18 +1,22 @@
-import SectionCard from '../components/SectionCard';
+﻿import SectionCard from '../components/SectionCard';
+import { useTranslate } from '../../hooks/useTranslate';
 import { mockBookings } from '../mockData';
+import StatusBadge from '../components/StatusBadge';
 
 export default function FittingBookingsPage() {
+  const { t } = useTranslate();
+
   return (
-    <SectionCard eyebrow="Appointments" title="Fitting bookings">
+    <SectionCard eyebrow={t('admin.fitting.eyebrow')} title={t('admin.fitting.title')}>
       <div className="grid gap-4">
         {mockBookings.map((booking) => (
           <div key={booking.id} className="rounded-[28px] border border-slate-200 bg-white p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-lg font-semibold text-slate-950">{booking.customer}</p>
-                <p className="mt-1 text-sm text-slate-500">{booking.time} with {booking.stylist}</p>
+                <p className="mt-1 text-sm text-slate-500">{booking.time} {t('admin.fitting.with')} {booking.stylist}</p>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{booking.status}</span>
+              <StatusBadge value={booking.status} />
             </div>
           </div>
         ))}
