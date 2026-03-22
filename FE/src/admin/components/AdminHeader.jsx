@@ -1,11 +1,14 @@
 import { Search, ChevronDown, Bell } from 'lucide-react';
+import { useTranslate } from '../../hooks/useTranslate';
 
 export default function AdminHeader({ title, user, search, onSearchChange }) {
+  const { t } = useTranslate();
+
   return (
     <header className="sticky top-0 z-20 border-b border-white/70 bg-[linear-gradient(180deg,rgba(250,248,243,0.94),rgba(250,248,243,0.78))] backdrop-blur-xl">
       <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-8">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">INHERE Rental Control</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">{t('header.controlCenter')}</p>
           <h1 className="mt-2 text-2xl font-semibold text-slate-950">{title}</h1>
         </div>
 
@@ -15,7 +18,7 @@ export default function AdminHeader({ title, user, search, onSearchChange }) {
             <input
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search orders, users, products..."
+              placeholder={t('header.searchPlaceholder')}
               className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-700 outline-none ring-0 transition focus:border-slate-900"
             />
           </label>
@@ -27,7 +30,7 @@ export default function AdminHeader({ title, user, search, onSearchChange }) {
               {String(user?.name || 'I').charAt(0)}
             </span>
             <span className="hidden sm:block">
-              <span className="block text-sm font-semibold text-slate-950">{user?.name || 'Admin'}</span>
+              <span className="block text-sm font-semibold text-slate-950">{user?.name || t('common.appName')}</span>
               <span className="block text-xs uppercase tracking-[0.2em] text-slate-400">{user?.role || 'staff'}</span>
             </span>
             <ChevronDown className="h-4 w-4 text-slate-400" />

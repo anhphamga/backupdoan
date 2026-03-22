@@ -1,11 +1,15 @@
-import SectionCard from '../components/SectionCard';
+﻿import SectionCard from '../components/SectionCard';
+import { useTranslate } from '../../hooks/useTranslate';
+import StatusBadge from '../components/StatusBadge';
 import { mockVouchers } from '../mockData';
 
 export default function VoucherPage() {
+  const { t } = useTranslate();
+
   return (
-    <SectionCard eyebrow="Growth" title="Vouchers">
+    <SectionCard eyebrow={t('admin.vouchers.eyebrow')} title={t('admin.vouchers.title')}>
       <div className="mb-5 flex justify-end">
-        <button type="button" className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Create voucher</button>
+        <button type="button" className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{t('admin.vouchers.createVoucher')}</button>
       </div>
       <div className="grid gap-4">
         {mockVouchers.map((voucher) => (
@@ -13,16 +17,14 @@ export default function VoucherPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-lg font-semibold text-slate-950">{voucher.code}</p>
-                <p className="mt-1 text-sm text-slate-500">{voucher.value} • expires {voucher.expiresAt}</p>
+                <p className="mt-1 text-sm text-slate-500">{voucher.value} • {t('admin.vouchers.expiresAt')} {voucher.expiresAt}</p>
               </div>
-              <button type="button" className={`rounded-2xl px-4 py-2 text-sm font-semibold ${voucher.status === 'Enabled' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                {voucher.status}
-              </button>
+              <StatusBadge value={voucher.status} />
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs uppercase tracking-[0.2em] text-slate-400">Usage</p><p className="mt-2 text-xl font-semibold text-slate-950">{voucher.used}</p></div>
-              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs uppercase tracking-[0.2em] text-slate-400">Limit</p><p className="mt-2 text-xl font-semibold text-slate-950">{voucher.limit}</p></div>
-              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs uppercase tracking-[0.2em] text-slate-400">Status</p><p className="mt-2 text-xl font-semibold text-slate-950">{voucher.status}</p></div>
+              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('admin.vouchers.usage')}</p><p className="mt-2 text-xl font-semibold text-slate-950">{voucher.used}</p></div>
+              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('admin.vouchers.limit')}</p><p className="mt-2 text-xl font-semibold text-slate-950">{voucher.limit}</p></div>
+              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('admin.vouchers.status')}</p><p className="mt-2"><StatusBadge value={voucher.status} /></p></div>
             </div>
           </div>
         ))}

@@ -249,6 +249,11 @@ export const updateOwnerShiftApi = async (shiftId, payload) => {
     return response.data
 }
 
+export const deleteOwnerShiftApi = async (shiftId) => {
+    const response = await axiosClient.delete(`/owner/shifts/${shiftId}`)
+    return response.data
+}
+
 export const importOwnerProductsApi = async (file) => {
     const formData = new FormData()
     formData.append('file', file)

@@ -78,7 +78,7 @@ const resolveUserAccess = async (user) => {
   const cached = userId ? getCachedPermissions(userId) : null;
   if (cached) return cached;
 
-  const roleName = String(user?.role || 'customer').toLowerCase();
+  const roleName = String(user?.role || 'customer').trim().toLowerCase();
   const roleMap = await loadRoleMap();
   const role = roleMap.get(roleName) || getDefaultRoleByName(roleName) || getDefaultRoleByName('customer');
   const inheritedPermissions = collectRolePermissions(roleMap, roleName);
