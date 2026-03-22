@@ -191,6 +191,7 @@ const snapshotOrderForAudit = (order) => ({
     totalAmount: Number(order?.totalAmount || 0),
     lateDays: Number(order?.lateDays || 0),
     lateFee: Number(order?.lateFee || 0),
+    washingFee: Number(order?.washingFee || 0),
     damageFee: Number(order?.damageFee || 0),
     compensationFee: Number(order?.compensationFee || 0),
     depositForfeited: Boolean(order?.depositForfeited),
@@ -198,6 +199,93 @@ const snapshotOrderForAudit = (order) => ({
     returnedAt: order?.returnedAt || null,
     noShowAt: order?.noShowAt || null,
 });
+
+/**
+ * Kiểm tra xem MongoDB có hỗ trợ replica set không.
+ * Nếu có, khởi tạo session + transaction.
+ */
+const startTransactionIfAvailable = async () => {
+    let session = null;
+    let useTransaction = false;
+    try {
+        const isMaster = await mongoose.connection.db.admin().command({ ismaster: 1 });
+        if (isMaster?.setName) {
+            session = await mongoose.startSession();
+            try {
+                session.startTransaction();
+                useTransaction = true;
+            } catch (err) {
+                console.warn('Transaction not supported in current deployment:', err.message);
+            }
+        }
+    } catch (err) {
+        console.warn('Cannot check replica set status; proceeding without transaction:', err.message);
+    }
+    return { session, useTransaction };
+};
+
+/**
+ * Quyết toán tiền cọc và trả thế chấp sau khi đơn hoàn tất.
+ * Logic dùng chung cho completeRentOrder và completeWashing.
+ *
+ * depositBalance = depositAmount - (remaining + lateFee + washingFee + damageFee + compensationFee)
+ *   > 0  → hoàn tiền thừa cho khách
+ *   < 0  → khách trả thêm
+ *   = 0  → cọc bù đắp vừa đủ, tịch thu cọc
+ */
+const settleDepositAndCollateral = async (orderId, order, method = 'Cash') => {
+    const heldDeposit = await Deposit.findOne({ orderId, status: 'Held' });
+    const depositAmount = Number(heldDeposit?.amount || 0);
+    const remainingAmount = Number(order.remainingAmount || 0);
+    const lateFee = Number(order.lateFee || 0);
+    const washingFee = Number(order.washingFee || 0);
+    const damageFee = Number(order.damageFee || 0);
+    const compensationFee = Number(order.compensationFee || 0);
+
+    const totalDue = remainingAmount + lateFee + washingFee + damageFee + compensationFee;
+    const depositBalance = depositAmount - totalDue;
+
+    if (depositBalance > 0) {
+        await Payment.create({
+            orderType: 'Rent',
+            orderId,
+            amount: depositBalance,
+            method,
+            status: 'Paid',
+            purpose: 'Refund',
+            transactionCode: `REF_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            paidAt: new Date()
+        });
+        if (heldDeposit) await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Refunded' });
+    } else if (depositBalance < 0) {
+        const extra = Math.abs(depositBalance);
+        const purpose = lateFee > 0 ? 'LateFee'
+            : compensationFee > 0 ? 'Compensation'
+            : damageFee > 0 ? 'DamageFee'
+            : washingFee > 0 ? 'WashingFee'
+            : 'Remaining';
+        await Payment.create({
+            orderType: 'Rent',
+            orderId,
+            amount: extra,
+            method,
+            status: 'Paid',
+            purpose,
+            transactionCode: `PAY_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            paidAt: new Date()
+        });
+        if (heldDeposit) await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Forfeited' });
+    } else if (heldDeposit) {
+        await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Forfeited' });
+    }
+
+    await Collateral.updateMany(
+        { orderId, status: 'Held' },
+        { status: 'Returned', returnedAt: new Date() }
+    );
+
+    return { depositBalance, totalDue, depositAmount };
+};
 
 const auditOrderChange = async (req, action, orderId, before, after) => (
     writeAuditLog({
@@ -792,8 +880,8 @@ const isOwnerOrStaff = (req, order) => {
 };
 
 exports.confirmPickup = async (req, res) => {
-    // Không dùng transaction (vì DB có thể chạy standalone)
-    const txOptions = {};
+    const { session, useTransaction } = await startTransactionIfAvailable();
+    const txOptions = useTransaction ? { session } : {};
 
     try {
         const { id } = req.params;
@@ -912,12 +1000,21 @@ exports.confirmPickup = async (req, res) => {
 
         await auditOrderChange(req, 'orders_rent.pickup.complete', order._id, before, snapshotOrderForAudit(order));
 
+        if (session) {
+            if (useTransaction) await session.commitTransaction();
+            await session.endSession();
+        }
+
         return res.json({
             success: true,
             message: 'Xac nhan khach da nhan do thanh cong',
             data: await fetchOrderDetail(id)
         });
     } catch (error) {
+        if (session) {
+            if (useTransaction) await session.abortTransaction();
+            await session.endSession();
+        }
         console.error('Confirm pickup error:', error);
         return res.status(500).json({ success: false, message: 'Loi server', error: error.message });
     }
@@ -954,12 +1051,12 @@ exports.markWaitingReturn = async (req, res) => {
 };
 
 exports.confirmReturn = async (req, res) => {
-    // Không dùng transaction (do có thể chạy standalone MongoDB)
-    const txOptions = {};
+    const { session, useTransaction } = await startTransactionIfAvailable();
+    const txOptions = useTransaction ? { session } : {};
 
     try {
         const { id } = req.params;
-        const { returnedItems = [], note = '' } = req.body;
+        const { returnedItems = [], note = '', washingFee = 0 } = req.body;
 
         if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
             return res.status(400).json({ success: false, message: 'Vui long cung cap danh sach san pham tra' });
@@ -994,6 +1091,7 @@ exports.confirmReturn = async (req, res) => {
         const lateDays = Number(order.lateDays || 0);
         const lateFee = Number(order.lateFee || 0);
         const totalDamageFee = returnedItems.reduce((sum, item) => sum + Number(item.damageFee || 0), 0);
+        const totalWashingFee = Number(washingFee || 0);
         const conditions = new Set(returnedItems.map((item) => item.condition));
         const returnCondition = conditions.has('Damaged')
             ? 'Damaged'
@@ -1007,7 +1105,7 @@ exports.confirmReturn = async (req, res) => {
                     orderId: id,
                     returnDate: new Date(),
                     condition: returnCondition,
-                    washingFee: 0,
+                    washingFee: totalWashingFee,
                     damageFee: totalDamageFee,
                     lateDays,
                     lateFee,
@@ -1018,7 +1116,7 @@ exports.confirmReturn = async (req, res) => {
                     staffId: req.user?.id
                 }
             ],
-            {}
+            txOptions
         ))[0];
 
         const instanceIds = returnedItems.map((item) => item.productInstanceId).filter(Boolean);
@@ -1073,6 +1171,7 @@ exports.confirmReturn = async (req, res) => {
 
         order.lateDays = lateDays;
         order.lateFee = lateFee;
+        order.washingFee = totalWashingFee;
         order.damageFee = totalDamageFee;
         order.returnedAt = new Date();
         order.status = returnedCount >= totalItems ? 'Returned' : 'WaitingReturn';
@@ -1082,12 +1181,13 @@ exports.confirmReturn = async (req, res) => {
             order.status = returnedCount >= totalItems ? 'Returned' : 'WaitingReturn';
         }
 
-        await order.save();
+        await order.save(txOptions);
 
+        const auditAction = lateDays >= 3 ? 'orders_rent.penalty.apply' : 'orders_rent.return.process';
         await writeAuditLog({
             req,
             user: req.user,
-            action: lateDays >= 3 ? 'orders_rent.penalty.apply' : 'orders_rent.return.process',
+            action: auditAction,
             resource: 'ReturnRecord',
             resourceId: returnRecord._id,
             before: null,
@@ -1095,16 +1195,16 @@ exports.confirmReturn = async (req, res) => {
                 condition: returnRecord.condition,
                 lateDays: returnRecord.lateDays,
                 lateFee: returnRecord.lateFee,
+                washingFee: returnRecord.washingFee,
                 damageFee: returnRecord.damageFee,
             },
         });
-        await auditOrderChange(
-            req,
-            lateDays >= 3 ? 'orders_rent.penalty.apply' : 'orders_rent.return.process',
-            order._id,
-            before,
-            snapshotOrderForAudit(order)
-        );
+        await auditOrderChange(req, auditAction, order._id, before, snapshotOrderForAudit(order));
+
+        if (session) {
+            if (useTransaction) await session.commitTransaction();
+            await session.endSession();
+        }
 
         return res.json({
             success: true,
@@ -1115,6 +1215,10 @@ exports.confirmReturn = async (req, res) => {
             }
         });
     } catch (error) {
+        if (session) {
+            if (useTransaction) await session.abortTransaction();
+            await session.endSession();
+        }
         console.error('Confirm return error:', error);
         return res.status(500).json({ success: false, message: 'Loi server', error: error.message });
     }
@@ -1184,56 +1288,10 @@ exports.completeRentOrder = async (req, res) => {
             });
         }
 
-        // 1) Tính toán tình trạng tiền (cấn trừ cọc)
-        const heldDeposit = await Deposit.findOne({ orderId: id, status: 'Held' });
-        const depositAmount = Number(heldDeposit?.amount || 0);
-        const remainingAmount = Number(order.remainingAmount || 0);
-        const lateFee = Number(order.lateFee || 0);
-        const compensationFee = Number(order.compensationFee || 0);
-        const damageFee = Number(order.damageFee || 0);
+        // Quyết toán tiền cọc và trả thế chấp
+        await settleDepositAndCollateral(id, order, method);
 
-        const totalDue = remainingAmount + lateFee + compensationFee + damageFee;
-        const depositBalance = depositAmount - totalDue;
-
-        // 2) Tạo các giao dịch nếu cần
-        if (depositBalance > 0) {
-            await Payment.create({
-                orderType: 'Rent',
-                orderId: id,
-                amount: depositBalance,
-                method,
-                status: 'Paid',
-                purpose: 'Refund',
-                transactionCode: `REF_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                paidAt: new Date()
-            });
-            if (heldDeposit) await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Refunded' });
-        } else if (depositBalance < 0) {
-            const extra = Math.abs(depositBalance);
-            const purpose = lateFee > 0 ? 'LateFee' : compensationFee > 0 ? 'Compensation' : 'Remaining';
-            await Payment.create({
-                orderType: 'Rent',
-                orderId: id,
-                amount: extra,
-                method,
-                status: 'Paid',
-                purpose,
-                transactionCode: `EXTRA_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                paidAt: new Date()
-            });
-            if (heldDeposit) await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Forfeited' });
-        } else if (heldDeposit) {
-            await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Forfeited' });
-        }
-
-        // 3) Trả lại thế chấp (CCCD/Tiền)
-        await Collateral.updateMany(
-            { orderId: id, status: 'Held' },
-            { status: 'Returned', returnedAt: new Date() }
-        );
-
-        // Chỉ chuyển sang Returned để khách xem số tiền còn lại và thanh toán
-        // Sẽ chuyển sang Completed khi hoàn tất giặt (completeWashing)
+        // Giữ nguyên Returned — chuyển sang Completed sau khi completeWashing
         order.status = 'Returned';
         await order.save();
 
@@ -1321,61 +1379,10 @@ exports.completeWashing = async (req, res) => {
             );
         }
 
-        // Nếu đơn đang ở trạng thái Returned, xử lý thanh toán và chuyển sang Completed
+        // Nếu đơn đang ở trạng thái Returned, quyết toán và chuyển sang Completed
         const before = snapshotOrderForAudit(order);
         if (order.status === 'Returned') {
-            // 1) Tính toán tình trạng tiền (cấn trừ cọc)
-            const heldDeposit = await Deposit.findOne({ orderId: id, status: 'Held' });
-            const depositAmount = Number(heldDeposit?.amount || 0);
-            const remainingAmount = Number(order.remainingAmount || 0);
-            const lateFee = Number(order.lateFee || 0);
-            const compensationFee = Number(order.compensationFee || 0);
-            const damageFee = Number(order.damageFee || 0);
-
-            const totalDue = remainingAmount + lateFee + compensationFee + damageFee;
-            const depositBalance = depositAmount - totalDue;
-
-            // 2) Tạo các giao dịch thanh toán
-            if (depositBalance > 0) {
-                // Hoàn tiền thừa cho khách
-                await Payment.create({
-                    orderType: 'Rent',
-                    orderId: id,
-                    amount: depositBalance,
-                    method,
-                    status: 'Paid',
-                    purpose: 'Refund',
-                    transactionCode: `REF_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                    paidAt: new Date()
-                });
-                if (heldDeposit) await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Refunded' });
-            } else if (depositBalance < 0) {
-                // Khách cần trả thêm tiền
-                const extra = Math.abs(depositBalance);
-                const purpose = lateFee > 0 ? 'LateFee' : compensationFee > 0 ? 'Compensation' : damageFee > 0 ? 'DamageFee' : 'Remaining';
-                await Payment.create({
-                    orderType: 'Rent',
-                    orderId: id,
-                    amount: extra,
-                    method,
-                    status: 'Paid',
-                    purpose,
-                    transactionCode: `PAY_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                    paidAt: new Date()
-                });
-                if (heldDeposit) await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Forfeited' });
-            } else if (heldDeposit) {
-                // Đúng bằng nhau: xem như cọc đã được trừ hết
-                await Deposit.updateOne({ _id: heldDeposit._id }, { status: 'Forfeited' });
-            }
-
-            // 3) Trả lại thế chấp (CCCD/Tiền)
-            await Collateral.updateMany(
-                { orderId: id, status: 'Held' },
-                { status: 'Returned', returnedAt: new Date() }
-            );
-
-            // 4) Chuyển sang Completed
+            await settleDepositAndCollateral(id, order, method);
             order.status = 'Completed';
             order.completedAt = new Date();
             await order.save();

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getAllRentOrdersApi, confirmRentOrderApi, confirmPickupApi, confirmReturnApi, completeWashingApi, finalizeRentOrderApi, markNoShowApi } from '../../services/rent-order.service'
 
 const statusLabels = {
@@ -61,7 +61,20 @@ export default function StaffRentOrders() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
+  const [actionSuccess, setActionSuccess] = useState('')
   const [finalizeMethod, setFinalizeMethod] = useState('Cash')
+
+  const showError = (msg) => {
+    setError(msg)
+    setActionSuccess('')
+    setTimeout(() => setError(''), 6000)
+  }
+
+  const showSuccess = (msg) => {
+    setActionSuccess(msg)
+    setError('')
+    setTimeout(() => setActionSuccess(''), 4000)
+  }
 
   // Collateral modal state
   const [showCollateralModal, setShowCollateralModal] = useState(false)
@@ -103,16 +116,14 @@ export default function StaffRentOrders() {
   }, [fetchOrders])
 
   const handleConfirm = async (orderId) => {
-    if (!confirm('Xác nhận đơn thuê này?')) return
-
     setActionLoading(true)
     try {
       await confirmRentOrderApi(orderId)
-      alert('Xác nhận đơn thành công!')
+      showSuccess('Xác nhận đơn thành công!')
       fetchOrders()
       setSelectedOrder(null)
     } catch (err) {
-      alert(err.response?.data?.message || 'Có lỗi xảy ra')
+      showError(err.response?.data?.message || 'Có lỗi xảy ra khi xác nhận đơn')
     } finally {
       setActionLoading(false)
     }
@@ -162,7 +173,7 @@ export default function StaffRentOrders() {
     setCollateralError('')
     try {
       await confirmPickupApi(pickupOrderId, { collateral })
-      alert('Xác nhận lấy đồ thành công!')
+      showSuccess('Xác nhận lấy đồ thành công!')
       fetchOrders()
       setSelectedOrder(null)
       closeCollateralModal()
@@ -214,7 +225,7 @@ export default function StaffRentOrders() {
         returnedItems,
         note: returnNote
       })
-      alert('Xác nhận trả đồ thành công!')
+      showSuccess('Xác nhận trả đồ thành công!')
       fetchOrders()
       setSelectedOrder(null)
       closeReturnModal()
@@ -226,51 +237,43 @@ export default function StaffRentOrders() {
   }
 
   const handleNoShow = async (orderId) => {
-    if (!confirm('Đánh dấu khách không đến nhận đồ? Sẽ mất cọc và trả đồ về kho.')) return
-
     setActionLoading(true)
     try {
       await markNoShowApi(orderId)
-      alert('Đã đánh dấu khách no-show. Cọc bị tịch thu.')
+      showSuccess('Đã đánh dấu khách no-show. Cọc bị tịch thu.')
       fetchOrders()
       setSelectedOrder(null)
     } catch (err) {
-      alert(err.response?.data?.message || 'Có lỗi xảy ra')
+      showError(err.response?.data?.message || 'Có lỗi xảy ra')
     } finally {
       setActionLoading(false)
     }
   }
 
   const handleCompleteWashing = async (orderId, method = 'Cash') => {
-    if (!confirm('Hoàn tất đơn? Sản phẩm sẽ sẵn sàng cho thuê tiếp theo.')) return
-
     setActionLoading(true)
     try {
       await completeWashingApi(orderId, { method })
-      alert('Hoàn tất đơn thành công! Sản phẩm đã có sẵn.')
+      showSuccess('Hoàn tất đơn thành công! Sản phẩm đã có sẵn.')
       fetchOrders()
       setSelectedOrder(null)
     } catch (err) {
-      alert(err.response?.data?.message || 'Có lỗi xảy ra')
+      showError(err.response?.data?.message || 'Có lỗi xảy ra')
     } finally {
       setActionLoading(false)
     }
   }
 
   const handleFinalize = async (orderId) => {
-    if (!confirm('Xác nhận chốt đơn?')) return
-
     setActionLoading(true)
     try {
       await finalizeRentOrderApi(orderId, { method: finalizeMethod })
-      alert('Chốt đơn thành công!')
+      showSuccess('Chốt đơn thành công!')
       fetchOrders()
       setSelectedOrder(null)
     } catch (err) {
-      const serverMessage = err.response?.data?.message
-      const serverError = err.response?.data?.error
-      console.error('Finalize error', serverMessage, serverError, err)
-      alert(serverMessage || serverError || 'Có lỗi xảy ra khi chốt đơn')
+      const msg = err.response?.data?.message || err.response?.data?.error || 'Có lỗi xảy ra khi chốt đơn'
+      showError(msg)
     } finally {
       setActionLoading(false)
     }
@@ -344,8 +347,16 @@ export default function StaffRentOrders() {
         </div>
       </div>
 
+      {actionSuccess && (
+        <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 shadow-sm">
+          <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/></svg>
+          {actionSuccess}
+        </div>
+      )}
+
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600 shadow-sm">
+        <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600 shadow-sm">
+          <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
           {error}
         </div>
       )}
@@ -602,56 +613,97 @@ export default function StaffRentOrders() {
 
       {/* Collateral Modal */}
       {showCollateralModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="px-6 py-4 border-b">
-              <h2 className="text-lg font-semibold">Xác nhận thông tin thế chấp</h2>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Loại thế chấp</label>
-                <select
-                  value={collateralType}
-                  onChange={(e) => setCollateralType(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                >
-                  <option value="CASH">Tiền mặt</option>
-                  <option value="CCCD">CCCD</option>
-                  <option value="GPLX">GPLX</option>
-                  <option value="CAVET">CAVET</option>
-                </select>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm px-4 pb-4 sm:items-center sm:pb-0">
+          <div className="w-full max-w-md bg-white rounded-[28px] shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-[linear-gradient(135deg,#eef2ff,#fff)] px-6 pt-6 pb-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-100">
+                  <svg className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500">Bàn giao đồ</p>
+                  <h2 className="text-lg font-semibold text-slate-950">Thông tin thế chấp</h2>
+                </div>
               </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-5">
+              {/* Type selector as cards */}
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Loại thế chấp</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'CASH', label: 'Tiền mặt', icon: '💵' },
+                    { value: 'CCCD', label: 'CCCD', icon: '🪪' },
+                    { value: 'GPLX', label: 'GPLX', icon: '🚗' },
+                    { value: 'CAVET', label: 'Cavet xe', icon: '📋' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => { setCollateralType(opt.value); setCollateralValue(''); setCollateralError(''); }}
+                      className={`flex items-center gap-2.5 rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition-all ${
+                        collateralType === opt.value
+                          ? 'border-indigo-300 bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-200'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white'
+                      }`}
+                    >
+                      <span className="text-lg">{opt.icon}</span>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Value input */}
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                   {collateralType === 'CASH' ? 'Số tiền thế chấp (VND)' : `Số ${collateralType}`}
                 </label>
                 <input
                   type={collateralType === 'CASH' ? 'number' : 'text'}
                   value={collateralValue}
-                  onChange={(e) => setCollateralValue(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  onChange={(e) => { setCollateralValue(e.target.value); setCollateralError(''); }}
+                  placeholder={collateralType === 'CASH' ? 'Nhập số tiền...' : `Nhập số ${collateralType}...`}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
                 />
               </div>
+
+              {/* Error */}
               {collateralError && (
-                <div className="text-sm text-red-600">{collateralError}</div>
+                <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                  <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                  {collateralError}
+                </div>
               )}
             </div>
-            <div className="flex justify-end gap-2 px-6 py-4 border-t">
+
+            {/* Footer */}
+            <div className="flex gap-3 border-t border-slate-100 px-6 py-4">
               <button
                 type="button"
                 onClick={closeCollateralModal}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
                 disabled={actionLoading}
+                className="flex-1 h-11 rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
                 Hủy
               </button>
               <button
                 type="button"
                 onClick={handlePickup}
-                className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-400"
                 disabled={actionLoading}
+                className="flex-1 h-11 rounded-2xl bg-indigo-600 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
               >
-                {actionLoading ? 'Đang xử lý...' : 'Xác nhận'}
+                {actionLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                    Đang xử lý...
+                  </span>
+                ) : 'Xác nhận bàn giao'}
               </button>
             </div>
           </div>
@@ -660,49 +712,61 @@ export default function StaffRentOrders() {
 
       {/* Return Modal */}
       {showReturnModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="px-6 py-4 border-b">
-              <h2 className="text-lg font-semibold">Xác nhận khách đã trả đồ</h2>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Ghi chú (nếu có)</label>
-                <textarea
-                  value={returnNote}
-                  onChange={(e) => setReturnNote(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  rows={2}
-                  placeholder="Ví dụ: 2 món bẩn, 1 món rách..."
-                />
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm px-4 pb-4 sm:items-center sm:pb-0">
+          <div className="w-full max-w-xl bg-white rounded-[28px] shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-[linear-gradient(135deg,#fff7ed,#fff)] px-6 pt-6 pb-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100">
+                  <svg className="h-5 w-5 text-orange-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-500">Nhận lại đồ</p>
+                  <h2 className="text-lg font-semibold text-slate-950">Xác nhận khách trả đồ</h2>
+                </div>
               </div>
+            </div>
 
-              <div className="border rounded-lg">
-                <div className="px-4 py-2 bg-gray-50 font-medium">Danh sách sản phẩm trả</div>
-                <div className="max-h-64 overflow-y-auto">
+            {/* Body */}
+            <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
+              {/* Product list */}
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tình trạng sản phẩm</p>
+                <div className="space-y-3">
                   {returnItems.map((item, index) => (
-                    <div key={item.productInstanceId} className="flex flex-col gap-2 px-4 py-3 border-b last:border-b-0">
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm font-medium text-gray-800">{item.label}</div>
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={item.condition}
-                            onChange={(e) => {
-                              const next = [...returnItems]
-                              next[index].condition = e.target.value
-                              if (e.target.value !== 'Damaged') next[index].damageFee = 0
-                              setReturnItems(next)
-                            }}
-                            className="rounded-md border border-gray-300 px-2 py-1 text-sm"
-                          >
-                            <option value="Dirty">Bẩn</option>
-                            <option value="Damaged">Rách</option>
-                          </select>
+                    <div key={item.productInstanceId} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-800 leading-snug">{item.label}</p>
+                        <div className="flex shrink-0 gap-1.5">
+                          {[
+                            { value: 'Dirty', label: 'Bẩn', active: 'bg-yellow-100 border-yellow-300 text-yellow-700' },
+                            { value: 'Damaged', label: 'Hư hỏng', active: 'bg-red-100 border-red-300 text-red-700' },
+                          ].map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => {
+                                const next = [...returnItems]
+                                next[index].condition = opt.value
+                                if (opt.value !== 'Damaged') next[index].damageFee = ''
+                                setReturnItems(next)
+                              }}
+                              className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+                                item.condition === opt.value
+                                  ? opt.active + ' shadow-sm'
+                                  : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
                         </div>
                       </div>
                       {item.condition === 'Damaged' && (
-                        <div className="flex items-center gap-2">
-                          <label className="text-sm text-gray-600">Phí phạt (VND):</label>
+                        <div className="mt-3 flex items-center gap-3">
+                          <label className="shrink-0 text-xs font-semibold text-slate-500">Phí bồi thường (VND)</label>
                           <input
                             type="text"
                             value={item.damageFee}
@@ -711,8 +775,8 @@ export default function StaffRentOrders() {
                               next[index].damageFee = e.target.value
                               setReturnItems(next)
                             }}
-                            className="w-32 rounded-md border border-gray-300 px-2 py-1 text-sm"
-                            placeholder="ví dụ: 100000"
+                            placeholder="VD: 100000"
+                            className="h-9 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-red-300 focus:ring-2 focus:ring-red-100"
                           />
                         </div>
                       )}
@@ -721,26 +785,51 @@ export default function StaffRentOrders() {
                 </div>
               </div>
 
+              {/* Note */}
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Ghi chú (tuỳ chọn)
+                </label>
+                <textarea
+                  value={returnNote}
+                  onChange={(e) => setReturnNote(e.target.value)}
+                  rows={2}
+                  placeholder="Ví dụ: 2 món bẩn, 1 món rách cổ..."
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-50 resize-none"
+                />
+              </div>
+
+              {/* Error */}
               {returnError && (
-                <div className="text-sm text-red-600">{returnError}</div>
+                <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                  <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                  {returnError}
+                </div>
               )}
             </div>
-            <div className="flex justify-end gap-2 px-6 py-4 border-t">
+
+            {/* Footer */}
+            <div className="flex gap-3 border-t border-slate-100 px-6 py-4">
               <button
                 type="button"
                 onClick={closeReturnModal}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
                 disabled={actionLoading}
+                className="flex-1 h-11 rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
                 Hủy
               </button>
               <button
                 type="button"
                 onClick={handleReturnConfirm}
-                className="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:bg-gray-400"
                 disabled={actionLoading}
+                className="flex-1 h-11 rounded-2xl bg-orange-500 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 disabled:opacity-50"
               >
-                {actionLoading ? 'Đang xử lý...' : 'Xác nhận'}
+                {actionLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                    Đang xử lý...
+                  </span>
+                ) : 'Xác nhận trả đồ'}
               </button>
             </div>
           </div>

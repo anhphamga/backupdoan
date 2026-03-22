@@ -29,15 +29,11 @@ const orderFieldFilter = createFieldAccessMiddleware([
 
 const canOperateAssignedOrder = (req, user) => {
   const role = String(user?.role || '').toLowerCase();
-  if (['owner', 'manager'].includes(role)) {
+  if (['owner', 'manager', 'staff'].includes(role)) {
     return true;
   }
 
-  if (!req.accessContext?.activeShift || !req.order) {
-    return false;
-  }
-
-  return !req.order.staffId || String(req.order.staffId) === String(user.id);
+  return false;
 };
 
 router.get(
