@@ -1,4 +1,4 @@
-const User = require('../model/User.model');
+﻿const User = require('../model/User.model');
 const { extractBearerToken, verifyAccessToken } = require('../utils/jwt');
 const {
   hasAnyPermission,
@@ -13,6 +13,8 @@ const forbidden = (res, message = 'Forbidden') => (
     message,
   })
 );
+
+const normalizeRole = (role) => String(role || '').trim().toLowerCase();
 
 const requireAuth = async (req, res, next) => {
   try {
@@ -57,7 +59,7 @@ const requireAuth = async (req, res, next) => {
 };
 
 const requireOwner = (req, res, next) => {
-  if (!req.user || req.user.role !== 'owner') {
+  if (!req.user || normalizeRole(req.user.role) !== 'owner') {
     return forbidden(res);
   }
 
@@ -115,9 +117,10 @@ const authorizeWithCondition = (permission, conditionFn) => {
 };
 
 const authorize = (...roles) => {
+  const allowedRoles = roles.map((role) => normalizeRole(role));
   return (req, res, next) => {
-    if (!req.user || !roles.map(r => r.toLowerCase()).includes(req.user.role.toLowerCase())) {
-      return forbidden(res, 'Forbidden - Báº¡n khÃ´ng cÃ³ quyá»n thá»±c hiá»‡n thao tÃ¡c nÃ y');
+    if (!req.user || !allowedRoles.includes(normalizeRole(req.user.role))) {
+      return forbidden(res, 'Forbidden - Bạn không có quyền thực hiện thao tác này');
     }
     return next();
   };

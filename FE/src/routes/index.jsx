@@ -75,6 +75,7 @@ const AppRoutes = () => {
                     <Route path="products/:productId" element={<OwnerProductDetailScreen />} />
                     <Route path="inventory" element={<OwnerInventoryScreen />} />
                     <Route path="staff" element={<OwnerStaffScreen />} />
+                    <Route path="shifts" element={<OwnerShiftsScreen />} />
                     <Route path="staff-calendar" element={<OwnerShiftsScreen />} />
                     <Route path="staff-analytics" element={<OwnerAnalyticsScreen />} />
                     <Route path="orders" element={<OwnerOrdersScreen />} />

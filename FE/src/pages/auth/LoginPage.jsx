@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { getRouteByRole } from '../../utils/auth'
+import { getRouteByRole, isDashboardRole } from '../../utils/auth'
 import { loadGoogleIdentityScript } from '../../utils/googleIdentity'
 import Header from '../../components/common/Header'
 import logoImage from '../../assets/logo/logo.png'
@@ -55,7 +55,7 @@ const LoginPage = () => {
               setGoogleSubmitting(true)
               const data = await loginWithGoogle({ idToken: response.credential })
               const fallbackPath = getRouteByRole(data.user.role)
-              const enforceRoleDashboard = data.user.role === 'owner' || data.user.role === 'staff'
+              const enforceRoleDashboard = isDashboardRole(data.user.role)
               const targetPath = enforceRoleDashboard ? fallbackPath : (redirectPath || fallbackPath)
               navigate(targetPath, { replace: true })
             } catch (apiError) {
@@ -137,7 +137,7 @@ const LoginPage = () => {
 
       const data = await login(payload, { rememberMe: form.rememberMe })
       const fallbackPath = getRouteByRole(data.user.role)
-      const enforceRoleDashboard = data.user.role === 'owner' || data.user.role === 'staff'
+      const enforceRoleDashboard = isDashboardRole(data.user.role)
       const targetPath = enforceRoleDashboard ? fallbackPath : (redirectPath || fallbackPath)
       navigate(targetPath, { replace: true })
     } catch (apiError) {

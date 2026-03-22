@@ -169,7 +169,7 @@ function TypeTab({ active, icon, label, description, onClick }) {
     )
 }
 
-export default function OrdersList() {
+export default function OrdersList({ showRentOrders = true, allowSaleStatusUpdate = true }) {
     const [orderType, setOrderType] = useState(ORDER_TYPES.sale)
     const [orders, setOrders] = useState([])
     const [saleMeta, setSaleMeta] = useState({ statusOptions: [] })
@@ -179,6 +179,12 @@ export default function OrdersList() {
     const [searchValue, setSearchValue] = useState('')
     const [selectedOrder, setSelectedOrder] = useState(null)
     const [savingStatus, setSavingStatus] = useState(false)
+
+    useEffect(() => {
+        if (!showRentOrders && orderType !== ORDER_TYPES.sale) {
+            setOrderType(ORDER_TYPES.sale)
+        }
+    }, [orderType, showRentOrders])
 
     useEffect(() => {
         setStatusFilter('All')
@@ -288,6 +294,7 @@ export default function OrdersList() {
 
     return (
         <div className="space-y-6">
+            {showRentOrders ? (
             <div className="grid gap-4 lg:grid-cols-2">
                 <TypeTab
                     active={orderType === ORDER_TYPES.sale}
@@ -304,6 +311,7 @@ export default function OrdersList() {
                     onClick={() => setOrderType(ORDER_TYPES.rent)}
                 />
             </div>
+            ) : null}
 
             <div className="grid gap-4 md:grid-cols-4">
                 <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -694,7 +702,7 @@ export default function OrdersList() {
                                             </p>
                                         </div>
 
-                                        {orderType === ORDER_TYPES.sale ? (
+                                        {orderType === ORDER_TYPES.sale && allowSaleStatusUpdate ? (
                                             <div className="mt-5 space-y-4">
                                                 {toArray(selectedOrder.availableNextStatuses).length > 0 ? (
                                                     <div className="grid gap-3 sm:grid-cols-2">
@@ -719,6 +727,10 @@ export default function OrdersList() {
                                                     </div>
                                                 )}
                                                 {savingStatus ? <p className="text-xs text-slate-500">Đang cập nhật trạng thái...</p> : null}
+                                            </div>
+                                        ) : orderType === ORDER_TYPES.sale ? (
+                                            <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600">
+                                                Owner đang ở chế độ chỉ xem cho đơn mua.
                                             </div>
                                         ) : (
                                             <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-600">

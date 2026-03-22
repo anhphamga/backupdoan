@@ -2,6 +2,7 @@ import { Link, NavLink } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
 import { ADMIN_NAV_GROUPS } from '../config';
 import { can } from '../../utils/access-control';
+import { useTranslate } from '../../hooks/useTranslate';
 
 const itemVisible = (user, item) => {
   if (item.roles && !item.roles.includes(user?.role)) return false;
@@ -10,6 +11,13 @@ const itemVisible = (user, item) => {
 };
 
 export default function Sidebar({ user, collapsed, onToggle }) {
+  const { t } = useTranslate();
+  const roleLabelMap = {
+    owner: t('sidebar.ownerRole'),
+    staff: t('sidebar.staffRole'),
+    manager: t('sidebar.managerRole'),
+  };
+
   return (
     <aside className={`relative flex h-full flex-col border-r border-slate-200/70 bg-[linear-gradient(180deg,#fffdf8,rgba(255,255,255,0.96))] transition-all duration-300 ${collapsed ? 'w-[92px]' : 'w-[280px]'}`}>
       <div className="flex items-center justify-between px-5 py-5">
@@ -20,7 +28,7 @@ export default function Sidebar({ user, collapsed, onToggle }) {
           {!collapsed ? (
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">INHERE</p>
-              <p className="text-lg font-semibold text-slate-950">Admin Suite</p>
+              <p className="text-lg font-semibold text-slate-950">{t('sidebar.adminSuite')}</p>
             </div>
           ) : null}
         </Link>
@@ -38,7 +46,7 @@ export default function Sidebar({ user, collapsed, onToggle }) {
           {!collapsed ? (
             <>
               <p className="text-sm font-semibold text-slate-900">{user?.name || 'INHERE Admin'}</p>
-              <p className="mt-1 text-sm text-slate-500">{String(user?.role || 'staff').toUpperCase()}</p>
+              <p className="mt-1 text-sm text-slate-500">{roleLabelMap[user?.role] || String(user?.role || 'staff').toUpperCase()}</p>
             </>
           ) : (
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-sm font-semibold text-white">
@@ -56,10 +64,10 @@ export default function Sidebar({ user, collapsed, onToggle }) {
           return (
             <div key={group.id}>
               {!collapsed ? (
-                <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-400">{group.label}</p>
+                <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-400">{t(group.labelKey)}</p>
               ) : null}
               <div className="mt-3 space-y-1.5">
-                {items.map(({ to, label, icon: Icon }) => (
+                {items.map(({ to, labelKey, icon: Icon }) => (
                   <NavLink
                     key={to}
                     to={to}
@@ -72,7 +80,7 @@ export default function Sidebar({ user, collapsed, onToggle }) {
                     <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/5 transition">
                       <Icon className="h-4 w-4" />
                     </span>
-                    {!collapsed ? <span>{label}</span> : null}
+                    {!collapsed ? <span>{t(labelKey)}</span> : null}
                   </NavLink>
                 ))}
               </div>
