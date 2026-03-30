@@ -32,6 +32,7 @@ import OwnerUserDetailScreen from '../pages/owner/OwnerUserDetailScreen'
 import OwnerUsersScreen from '../pages/owner/OwnerUsersScreen'
 import OwnerInventoryScreen from '../pages/owner/OwnerInventoryScreen'
 import OwnerReviewsScreen from '../pages/owner/OwnerReviewsScreen'
+import OwnerBlogsScreen from '../pages/owner/OwnerBlogsScreen'
 // Rental pages
 import RentalCheckoutPage from '../pages/RentalCheckoutPage'
 import RentalDetailPage from '../pages/RentalDetailPage'
@@ -90,6 +91,7 @@ const AppRoutes = () => {
                     <Route path="staff-analytics" element={<OwnerAnalyticsScreen />} />
                     <Route path="orders" element={<OwnerOrdersScreen />} />
                     <Route path="reviews" element={<OwnerReviewsScreen />} />
+                    <Route path="blogs" element={<OwnerBlogsScreen />} />
                     <Route path="promotions" element={<OwnerPromotionsScreen />} />
                     <Route path="membership" element={<OwnerMembershipScreen />} />
                     <Route path="alerts" element={<OwnerAlertsScreen />} />

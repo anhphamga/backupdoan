@@ -36,6 +36,7 @@ const navItems = [
   { to: '/owner/staff', labelKey: 'sidebar.staff', icon: BadgeCheck },
   { to: '/owner/shifts', labelKey: 'sidebar.shifts', icon: CalendarClock },
   { to: '/owner/orders', labelKey: 'sidebar.orders', icon: ReceiptText },
+  { to: '/owner/blogs', label: 'Quản lý blog', icon: MessageSquareText },
   { to: '/owner/reviews', label: 'Quản lý đánh giá', icon: MessageSquareText },
   { to: '/owner/promotions', labelKey: 'sidebar.vouchers', icon: Megaphone },
   { to: '/owner/membership', labelKey: 'sidebar.membership', icon: CreditCard },
@@ -54,6 +55,7 @@ const pageTitleMap = {
   'staff-analytics': 'pageTitles.staffAnalytics',
   shifts: 'pageTitles.shiftManagement',
   orders: 'pageTitles.rentOrders',
+  blogs: 'Quản lý blog',
   promotions: 'pageTitles.vouchers',
   reviews: 'pageTitles.reviews',
   membership: 'pageTitles.membership',
@@ -82,6 +84,7 @@ const OwnerLayout = () => {
   const [layoutMode, setLayoutMode] = useState('hydrogen')
   const [accentColor, setAccentColor] = useState('blue')
   const [ownerMenuOpen, setOwnerMenuOpen] = useState(false)
+  const [ownerSearchValue, setOwnerSearchValue] = useState('')
 
   const handleLogout = async () => {
     if (confirm(t('owner.confirmLogout'))) {
@@ -245,6 +248,8 @@ const OwnerLayout = () => {
                 ) : (
                   <input
                     type="text"
+                    value={ownerSearchValue}
+                    onChange={(event) => setOwnerSearchValue(event.target.value)}
                     placeholder={t('header.searchOwnerGeneral')}
                     className="w-full rounded-lg border-none bg-slate-100 py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-[#1975d2]/50"
                   />

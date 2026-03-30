@@ -17,6 +17,7 @@ const upload = multer({
 
 const uploadAvatar = upload.single('avatar');
 const uploadProductImages = upload.array('images', 10);
+const uploadBlogThumbnail = upload.single('thumbnail');
 
 const excelUpload = multer({
   storage: multer.memoryStorage(),
@@ -44,6 +45,7 @@ const uploadExcel = excelUpload.single('file');
 
 module.exports = {
   uploadAvatar,
+  uploadBlogThumbnail,
   uploadProductImages,
   uploadExcel
 };
