@@ -126,8 +126,13 @@ const authorize = (...roles) => {
   };
 };
 
+const checkRole = (...roles) => authorize(...roles);
+const checkPermission = (permission) => authorizePermission(permission);
+
 module.exports = {
   requireAuth,
+  checkPermission,
+  checkRole,
   requireOwner,
   authenticate: requireAuth,
   authorize,

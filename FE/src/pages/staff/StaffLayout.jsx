@@ -51,6 +51,7 @@ export default function StaffLayout({ children }) {
     { to: "/staff/rent-orders", label: "Đơn thuê", icon: "DT" },
     { to: "/staff/walk-in", label: "Tạo đơn tại chỗ", icon: "WI" },
     { to: "/staff/bookings", label: "Booking thử đồ", icon: "BK" },
+    { to: "/staff/blogs", label: "Bài viết blog", icon: "BL" },
     { to: "/staff/reviews", label: "Quản lý đánh giá", icon: "DG" },
     { to: "/staff/sale-order", label: "Đơn bán", icon: "TB" },
   ];

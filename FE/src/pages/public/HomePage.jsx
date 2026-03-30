@@ -96,8 +96,8 @@ const I18N = {
     "buy.p4.n": "Set đôi / gia đình",
     "buy.p4.m": "Nhiều lựa chọn màu sắc",
 
-    "btn.rent": "Thuê ngay",
-    "btn.buy": "Mua ngay",
+    "btn.rent": "Thuê",
+    "btn.buy": "Mua",
     "btn.detail": "Xem chi tiết",
 
     "booking.title": "Đặt lịch thử đồ trước khi đến Hội An",
@@ -1356,8 +1356,19 @@ const Homepage = ({ initialSection = "" }) => {
                   <p className="ptitle">{product.name}</p>
                   <p className="pmeta">{product.meta}</p>
                   <div className="pactions">
-                    <button className="pbtn primary" type="button">
+                    <button
+                      className="pbtn primary"
+                      type="button"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                    >
                       {t(lang, "btn.rent")}
+                    </button>
+                    <button
+                      className="pbtn"
+                      type="button"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                    >
+                      {t(lang, "btn.buy")}
                     </button>
                     {canViewProductDetail(product.id) ? (
                       <button
@@ -1413,8 +1424,19 @@ const Homepage = ({ initialSection = "" }) => {
                   <p className="ptitle">{product.name}</p>
                   <p className="pmeta">{product.meta}</p>
                   <div className="pactions">
-                    <button className="pbtn primary" type="button">
+                    <button
+                      className="pbtn primary"
+                      type="button"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                    >
                       {t(lang, "btn.buy")}
+                    </button>
+                    <button
+                      className="pbtn"
+                      type="button"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                    >
+                      {t(lang, "btn.rent")}
                     </button>
                     <button
                       className="pbtn"
@@ -1465,8 +1487,19 @@ const Homepage = ({ initialSection = "" }) => {
                   <p className="ptitle">{product.name}</p>
                   <p className="pmeta">{product.meta}</p>
                   <div className="pactions">
-                    <button className="pbtn primary" type="button">
+                    <button
+                      className="pbtn primary"
+                      type="button"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                    >
                       {t(lang, "btn.rent")}
+                    </button>
+                    <button
+                      className="pbtn"
+                      type="button"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                    >
+                      {t(lang, "btn.buy")}
                     </button>
                     <button
                       className="pbtn"
