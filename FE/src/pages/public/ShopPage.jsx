@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { SlidersHorizontal, X } from "lucide-react";
 import Header from "../../components/common/Header";
@@ -32,7 +32,7 @@ export default function ShopPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { addItem } = useBuyCart();
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { isFavorite, isFavoriteLoading, toggleFavorite } = useFavorites();
 
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
@@ -166,19 +166,32 @@ export default function ShopPage() {
     return ids;
   }, [filteredProducts, isFavorite]);
 
+  const favoriteLoadingIds = useMemo(() => {
+    const ids = new Set();
+    filteredProducts.forEach((product) => {
+      if (isFavoriteLoading(product._id)) ids.add(product._id);
+    });
+    return ids;
+  }, [filteredProducts, isFavoriteLoading]);
+
   const showToast = (message) => {
     setToast(message);
     setTimeout(() => setToast(""), 2200);
   };
 
-  const handleToggleFavorite = (product) => {
-    const result = toggleFavorite(product);
+  const handleToggleFavorite = async (product) => {
+    const result = await toggleFavorite(product);
     if (!result.ok && result.reason === "AUTH_REQUIRED") {
-      showToast("Vui lòng đăng nhập để dùng tính năng yêu thích.");
+      showToast("Vui lòng đăng nhập để sử dụng chức năng yêu thích");
       navigate("/login", { state: { from: location } });
       return;
     }
-    showToast(result.added ? "Đã thêm vào yêu thích." : "Đã xóa khỏi yêu thích.");
+    if (!result.ok && result.reason === "PENDING") return;
+    if (!result.ok) {
+      showToast(result.message || "Không thể cập nhật yêu thích");
+      return;
+    }
+    showToast(result.added ? "Đã thêm vào yêu thích" : "Đã xóa khỏi yêu thích");
   };
 
   const handleAddToCart = (product) => {
@@ -240,6 +253,7 @@ export default function ShopPage() {
               products={filteredProducts}
               loading={loading}
               favoriteIds={favoriteIds}
+              favoriteLoadingIds={favoriteLoadingIds}
               onToggleFavorite={handleToggleFavorite}
               onQuickView={setQuickViewProduct}
               onPrimaryAction={handleAddToCart}

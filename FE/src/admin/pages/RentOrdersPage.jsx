@@ -99,7 +99,7 @@ export default function RentOrdersPage({ user }) {
             <div className="rounded-3xl bg-slate-50 p-5">
               <p className="text-xs uppercase tracking-[0.22em] text-slate-400">{t('admin.rentOrders.assignedStaff')}</p>
               <p className="mt-3 text-lg font-semibold text-slate-950">{selectedOrder.assignedStaff}</p>
-              <p className="mt-1 text-sm text-slate-500">{t('admin.rentOrders.remaining')}: {selectedOrder.remaining.toLocaleString('vi-VN')}Ä‘</p>
+              <p className="mt-1 text-sm text-slate-500">{t('admin.rentOrders.remaining')}: {selectedOrder.remaining.toLocaleString('vi-VN')}đ</p>
               <div className="mt-3"><StatusBadge value={selectedOrder.status} /></div>
             </div>
           </div>

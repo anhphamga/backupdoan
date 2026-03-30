@@ -71,7 +71,7 @@ const isDateAvailable = (product, startDate, endDate) => {
 export default function RentPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { isFavorite, isFavoriteLoading, toggleFavorite } = useFavorites();
 
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
@@ -99,6 +99,13 @@ export default function RentPage() {
   const openBookingParam = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get('openBooking') === '1';
+  }, [location.search]);
+
+  const sortParam = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const value = String(params.get('sort') || '').trim().toLowerCase();
+    const allowed = new Set(['top_liked', 'newest', 'price_asc', 'price_desc', 'name_asc']);
+    return allowed.has(value) ? value : '';
   }, [location.search]);
 
   const categoryTree = useMemo(() => buildSidebarTree(categories), [categories]);
@@ -139,6 +146,14 @@ export default function RentPage() {
       setIsBookingOpen(true);
     }
   }, [openBookingParam]);
+
+  useEffect(() => {
+    if (sortParam) {
+      setSortBy(sortParam);
+    } else {
+      setSortBy('top_liked');
+    }
+  }, [sortParam]);
 
   useEffect(() => {
     let mounted = true;
@@ -200,11 +215,21 @@ export default function RentPage() {
       return bySearch && bySize && byColor && byOccasion && byPrice && byDate;
     });
 
-    if (sortBy === 'top_liked') list.sort((a, b) => getLikeCount(b) - getLikeCount(a));
-    else if (sortBy === 'price_asc') list.sort((a, b) => Number(a.baseRentPrice || 0) - Number(b.baseRentPrice || 0));
-    else if (sortBy === 'price_desc') list.sort((a, b) => Number(b.baseRentPrice || 0) - Number(a.baseRentPrice || 0));
-    else if (sortBy === 'name_asc') list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'vi'));
-    else list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    list.sort((a, b) => {
+      const likeDiff = getLikeCount(b) - getLikeCount(a);
+      if (likeDiff !== 0) return likeDiff;
+
+      if (sortBy === 'price_asc') {
+        return Number(a.baseRentPrice || 0) - Number(b.baseRentPrice || 0);
+      }
+      if (sortBy === 'price_desc') {
+        return Number(b.baseRentPrice || 0) - Number(a.baseRentPrice || 0);
+      }
+      if (sortBy === 'name_asc') {
+        return String(a.name || '').localeCompare(String(b.name || ''), 'vi');
+      }
+      return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+    });
 
     return list;
   }, [products, filters, sortBy, searchKeyword, startDate, endDate]);
@@ -216,6 +241,14 @@ export default function RentPage() {
     });
     return ids;
   }, [filteredProducts, isFavorite]);
+
+  const favoriteLoadingIds = useMemo(() => {
+    const ids = new Set();
+    filteredProducts.forEach((product) => {
+      if (isFavoriteLoading(product._id)) ids.add(product._id);
+    });
+    return ids;
+  }, [filteredProducts, isFavoriteLoading]);
 
   const outfitSuggestions = useMemo(() => {
     return filteredProducts.slice(0, 8).map((product, index) => ({
@@ -232,11 +265,16 @@ export default function RentPage() {
     setTimeout(() => setToast(''), 2200);
   };
 
-  const handleToggleFavorite = (product) => {
-    const result = toggleFavorite(product);
+  const handleToggleFavorite = async (product) => {
+    const result = await toggleFavorite(product);
     if (!result.ok && result.reason === 'AUTH_REQUIRED') {
-      showToast('Vui lòng đăng nhập để dùng tính năng yêu thích.');
+      showToast('Vui lòng đăng nhập để sử dụng chức năng yêu thích');
       navigate('/login', { state: { from: location } });
+      return;
+    }
+    if (!result.ok && result.reason === 'PENDING') return;
+    if (!result.ok) {
+      showToast(result.message || 'Không thể cập nhật yêu thích.');
       return;
     }
     showToast(result.added ? 'Đã thêm vào yêu thích.' : 'Đã xóa khỏi yêu thích.');
@@ -327,6 +365,7 @@ export default function RentPage() {
               products={filteredProducts}
               loading={loading}
               favoriteIds={favoriteIds}
+              favoriteLoadingIds={favoriteLoadingIds}
               onToggleFavorite={handleToggleFavorite}
               onQuickView={setQuickViewProduct}
               onPrimaryAction={handleRentNow}

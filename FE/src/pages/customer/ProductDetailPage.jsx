@@ -97,7 +97,7 @@ export default function ProductDetailPage() {
   const location = useLocation();
   const { addItem } = useRentalCart();
   const { addItem: addBuyItem } = useBuyCart();
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { isFavorite, isFavoriteLoading, toggleFavorite } = useFavorites();
   const lang = "vi";
   const [loading, setLoading] = useState(true);
   const [product, setProduct] = useState(null);
@@ -279,7 +279,8 @@ export default function ProductDetailPage() {
     availableInstances.forEach((instance) => {
       const score = Number(instance?.conditionScore ?? 100);
       const level = String(instance?.conditionLevel || "Used");
-      const price = Number(instance?.currentRentPrice ?? 0);
+      const rentPrice = Number(instance?.currentRentPrice ?? 0);
+      const salePrice = Number(instance?.currentSalePrice ?? 0);
       const key = `${score}__${level}`;
 
       if (!grouped.has(key)) {
@@ -287,7 +288,8 @@ export default function ProductDetailPage() {
           key,
           score,
           level,
-          price,
+          rentPrice,
+          salePrice,
           instanceId: instance?._id || null,
           count: 1,
         });
@@ -295,11 +297,13 @@ export default function ProductDetailPage() {
       }
 
       const current = grouped.get(key);
-      const cheaper = price > 0 && (current.price <= 0 || price < current.price);
+      const cheaperRent = rentPrice > 0 && (current.rentPrice <= 0 || rentPrice < current.rentPrice);
+      const cheaperSale = salePrice > 0 && (current.salePrice <= 0 || salePrice < current.salePrice);
       grouped.set(key, {
         ...current,
-        price: cheaper ? price : current.price,
-        instanceId: cheaper ? (instance?._id || current.instanceId) : current.instanceId,
+        rentPrice: cheaperRent ? rentPrice : current.rentPrice,
+        salePrice: cheaperSale ? salePrice : current.salePrice,
+        instanceId: cheaperRent ? (instance?._id || current.instanceId) : current.instanceId,
         count: Number(current.count || 0) + 1,
       });
     });
@@ -308,7 +312,7 @@ export default function ProductDetailPage() {
       .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
       .map((item) => ({
         ...item,
-        label: `${item.level === "New" ? "Mới" : "Đã sử dụng"} - ${item.score}/100 - ${formatCurrency(item.price, lang)}${item.count > 1 ? ` (${item.count} sản phẩm)` : ""}`,
+        label: `${item.level === "New" ? "Mới" : "Đã sử dụng"} - ${item.score}/100 - ${formatCurrency(item.rentPrice, lang)}${item.count > 1 ? ` (${item.count} sản phẩm)` : ""}`,
       }));
   }, [availableInstances, lang]);
 
@@ -332,6 +336,11 @@ export default function ProductDetailPage() {
     return isFavorite(product._id);
   }, [isFavorite, product?._id]);
 
+  const productFavoriteLoading = useMemo(() => {
+    if (!product?._id) return false;
+    return isFavoriteLoading(product._id);
+  }, [isFavoriteLoading, product?._id]);
+
   useEffect(() => {
     if (selectedImageIndex < currentImagesByColor.length) return;
     setSelectedImageIndex(0);
@@ -339,7 +348,7 @@ export default function ProductDetailPage() {
 
   const currentRentPrice = useMemo(() => {
     if (selectedConditionOption) {
-      return Number(selectedConditionOption.price || 0);
+      return Number(selectedConditionOption.rentPrice || 0);
     }
     if (!product) return 0;
     if (!hasVariantPricing) return Number(product.baseRentPrice || 0);
@@ -359,6 +368,13 @@ export default function ProductDetailPage() {
     return Number(product.baseRentPrice || 0);
   }, [selectedConditionOption, product, hasVariantPricing, isFreeSize, selectedSize, selectedColor]);
 
+  const currentSalePrice = useMemo(() => {
+    if (selectedConditionOption) {
+      return Number(selectedConditionOption.salePrice || 0);
+    }
+    return Number(product?.baseSalePrice || 0);
+  }, [selectedConditionOption, product?.baseSalePrice]);
+
   const canSubmit = useMemo(() => {
     if (!product) return false;
     if (Number(product?.availableQuantity || 0) <= 0) return false;
@@ -371,13 +387,13 @@ export default function ProductDetailPage() {
 
   const canBuy = useMemo(() => {
     if (!canSubmit) return false;
-    if (Number(product?.baseSalePrice || 0) <= 0) return false;
+    if (Number(currentSalePrice || 0) <= 0) return false;
     if (Number(product?.availableQuantity || 0) <= 0) return false;
     if (conditionOptions.length > 0) {
       return Number(selectedConditionOption?.score || 0) === 100;
     }
     return true;
-  }, [canSubmit, product?.baseSalePrice, product?.availableQuantity, conditionOptions.length, selectedConditionOption?.score]);
+  }, [canSubmit, currentSalePrice, product?.availableQuantity, conditionOptions.length, selectedConditionOption?.score]);
 
   useEffect(() => {
     if (!product?._id) return;
@@ -556,7 +572,7 @@ export default function ProductDetailPage() {
       addBuyItem(product, {
         color: selectedColor,
         size: selectedSize,
-        salePrice: product.baseSalePrice,
+        salePrice: currentSalePrice,
         productInstanceId: selectedConditionOption?.instanceId || null,
         conditionScore: Number(selectedConditionOption?.score ?? 100),
         quantity: 1
@@ -568,10 +584,10 @@ export default function ProductDetailPage() {
     }
   };
 
-  const handleToggleFavorite = () => {
+  const handleToggleFavorite = async () => {
     if (!product?._id) return;
 
-    const result = toggleFavorite({
+    const result = await toggleFavorite({
       id: product._id,
       name: product.name,
       imageUrl: currentImagesByColor[0] || product.imageUrl || "",
@@ -579,8 +595,13 @@ export default function ProductDetailPage() {
     });
 
     if (!result.ok && result.reason === "AUTH_REQUIRED") {
-      showToast(t.toastFavoriteLogin);
+      showToast("Vui lòng đăng nhập để sử dụng chức năng yêu thích");
       navigate("/login", { state: { from: location } });
+      return;
+    }
+    if (!result.ok && result.reason === "PENDING") return;
+    if (!result.ok) {
+      showToast(result.message || "Không thể cập nhật yêu thích");
       return;
     }
 
@@ -629,6 +650,7 @@ export default function ProductDetailPage() {
                   loading={loading}
                   productName={product.name || "product"}
                   isFavorite={productIsFavorite}
+                  favoriteLoading={productFavoriteLoading}
                   onToggleFavorite={handleToggleFavorite}
                 />
 
@@ -637,7 +659,7 @@ export default function ProductDetailPage() {
                   category={product.category}
                   badges={badges}
                   rentPriceText={formatCurrency(currentRentPrice, lang)}
-                  salePriceText={formatCurrency(product.baseSalePrice, lang)}
+                  salePriceText={formatCurrency(currentSalePrice, lang)}
                   variantContent={
                     <VariantSelector
                       colors={colors}
@@ -658,7 +680,7 @@ export default function ProductDetailPage() {
                   actionsContent={
                     <ProductActions
                       rentPriceText={formatCurrency(currentRentPrice, lang)}
-                      salePriceText={formatCurrency(product.baseSalePrice, lang)}
+                      salePriceText={formatCurrency(currentSalePrice, lang)}
                       onRent={handleRent}
                       onBuy={handleBuy}
                       loadingAction={loadingAction}

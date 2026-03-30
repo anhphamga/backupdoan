@@ -18,6 +18,7 @@ export default function ProductGrid({
   loading = false,
   mode = 'shop',
   favoriteIds = new Set(),
+  favoriteLoadingIds = new Set(),
   onToggleFavorite,
   onQuickView,
   onPrimaryAction,
@@ -50,6 +51,7 @@ export default function ProductGrid({
           product={product}
           mode={mode}
           isFavorite={favoriteIds.has(product._id)}
+          favoriteLoading={favoriteLoadingIds.has(product._id)}
           onToggleFavorite={onToggleFavorite}
           onQuickView={onQuickView}
           onPrimaryAction={onPrimaryAction}

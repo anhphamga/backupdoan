@@ -100,7 +100,7 @@ const buildNormalizedSaleItems = (items = [], productMap = new Map()) => {
   return items.map((item) => {
     const product = productMap.get(String(item.productId));
     const quantity = Math.max(Number(item.quantity || 1), 1);
-    const unitPrice = Number(product?.baseSalePrice || item.salePrice || 0);
+    const unitPrice = Number(item.salePrice || product?.baseSalePrice || 0);
 
     if (!product || !Number.isFinite(unitPrice) || unitPrice < 0) {
       throw new Error('INVALID_PRODUCT_DATA');
