@@ -1,4 +1,4 @@
-﻿import { Heart, Eye } from 'lucide-react';
+﻿import { Heart, Eye, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { formatVND } from '../../../pages/public/catalogHelpers';
 
@@ -6,6 +6,7 @@ export default function ProductCard({
   product,
   mode = 'shop',
   isFavorite = false,
+  favoriteLoading = false,
   onToggleFavorite,
   onQuickView,
   onPrimaryAction,
@@ -36,12 +37,17 @@ export default function ProductCard({
         <button
           type="button"
           onClick={() => onToggleFavorite?.(product)}
+          disabled={favoriteLoading}
           className={`absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border bg-white/90 transition ${
             isFavorite ? 'border-rose-300 text-rose-500' : 'border-amber-200 text-slate-500 hover:text-rose-500'
-          }`}
+          } ${favoriteLoading ? 'cursor-not-allowed opacity-70' : ''}`}
           aria-label="Yêu thích"
         >
-          <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+          {favoriteLoading ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+          )}
         </button>
 
         <button

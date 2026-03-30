@@ -3,6 +3,7 @@
 export default function BookingCard({
   booking,
   nearTime = false,
+  canRespond = true,
   onDetail,
   onConfirm,
   onReject,
@@ -67,7 +68,7 @@ export default function BookingCard({
         <div className="flex min-w-[210px] flex-col items-start gap-2 xl:items-end">
           <BookingStatusBadge status={status} />
 
-          {status === 'pending' ? (
+          {status === 'pending' && canRespond ? (
             <div className="flex w-full flex-wrap gap-2 xl:justify-end">
               <button
                 type="button"

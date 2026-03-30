@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
     CalendarDays,
     CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
     Circle,
     Eye,
     Mail,
@@ -23,6 +25,7 @@ const ORDER_TYPES = {
     sale: 'sale',
     rent: 'rent'
 }
+const PAGE_SIZE = 10
 
 const DEFAULT_STATUS_BADGE = 'bg-slate-100 text-slate-700'
 
@@ -179,6 +182,7 @@ export default function OrdersList({ showRentOrders = true, allowSaleStatusUpdat
     const [searchValue, setSearchValue] = useState('')
     const [selectedOrder, setSelectedOrder] = useState(null)
     const [savingStatus, setSavingStatus] = useState(false)
+    const [currentPage, setCurrentPage] = useState(1)
 
     useEffect(() => {
         if (!showRentOrders && orderType !== ORDER_TYPES.sale) {
@@ -190,7 +194,12 @@ export default function OrdersList({ showRentOrders = true, allowSaleStatusUpdat
         setStatusFilter('All')
         setSearchValue('')
         setSelectedOrder(null)
+        setCurrentPage(1)
     }, [orderType])
+
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchValue, statusFilter])
 
     const loadOrders = useCallback(async () => {
         try {
@@ -269,6 +278,22 @@ export default function OrdersList({ showRentOrders = true, allowSaleStatusUpdat
             return acc
         }, { total: 0, amount: 0, pending: 0, processing: 0 })
     }, [orderType, orders])
+
+    const totalItems = orders.length
+    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
+    const safeCurrentPage = Math.min(currentPage, totalPages)
+    const startItemIndex = totalItems === 0 ? 0 : (safeCurrentPage - 1) * PAGE_SIZE
+    const endItemIndex = Math.min(startItemIndex + PAGE_SIZE, totalItems)
+    const paginatedOrders = useMemo(
+        () => orders.slice(startItemIndex, endItemIndex),
+        [orders, startItemIndex, endItemIndex]
+    )
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages)
+        }
+    }, [currentPage, totalPages])
 
     const handleUpdateSaleStatus = async (nextStatus) => {
         if (orderType !== ORDER_TYPES.sale || !selectedOrder?._id || !nextStatus || nextStatus === selectedOrder.status) {
@@ -410,7 +435,7 @@ export default function OrdersList({ showRentOrders = true, allowSaleStatusUpdat
                                 </tr>
                             ) : null}
 
-                            {!loading && orders.map((order) => (
+                            {!loading && paginatedOrders.map((order) => (
                                 <tr key={order._id} className="hover:bg-slate-50/70">
                                     <td className="px-5 py-4 font-semibold text-[#1975d2]">#{String(order._id).slice(-8)}</td>
                                     <td className="px-5 py-4">
@@ -440,6 +465,35 @@ export default function OrdersList({ showRentOrders = true, allowSaleStatusUpdat
                         </tbody>
                     </table>
                 </div>
+
+                {!loading && orders.length > 0 ? (
+                    <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
+                        <p className="text-sm text-slate-500">
+                            Hiển thị {startItemIndex + 1}-{endItemIndex} trên tổng {totalItems} đơn
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-45"
+                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                disabled={safeCurrentPage === 1}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <span className="px-2 text-sm font-medium text-slate-700">
+                                Trang {safeCurrentPage}/{totalPages}
+                            </span>
+                            <button
+                                type="button"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-45"
+                                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                                disabled={safeCurrentPage === totalPages}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
             </div>
 
             {selectedOrder ? (

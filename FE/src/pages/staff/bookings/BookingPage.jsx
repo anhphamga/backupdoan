@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import BookingActionModal from './BookingActionModal';
 import BookingCard from './BookingCard';
 import { getStaffBookingsRequest, respondBookingRequest } from '../../../api/booking.api';
@@ -9,6 +10,7 @@ const FILTER_OPTIONS = [
   { value: 'confirmed', label: 'Đã xác nhận' },
   { value: 'rejected', label: 'Từ chối' },
 ];
+const PAGE_SIZE = 10;
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
@@ -65,7 +67,7 @@ const isNearTime = (booking) => {
   return diffMs >= 0 && diffMs <= 2 * 60 * 60 * 1000;
 };
 
-export default function BookingPage() {
+export default function BookingPage({ readOnly = false }) {
   const [bookings, setBookings] = useState([]);
   const [filterStatus, setFilterStatus] = useState('');
   const [loading, setLoading] = useState(true);
@@ -77,6 +79,7 @@ export default function BookingPage() {
   const [respondStatus, setRespondStatus] = useState('confirmed');
   const [staffNote, setStaffNote] = useState('');
   const [responding, setResponding] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchBookings = async () => {
     try {
@@ -99,6 +102,10 @@ export default function BookingPage() {
     fetchBookings();
   }, [filterStatus]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus]);
+
   const openModal = (booking, mode) => {
     setActiveBooking(booking);
     setModalMode(mode);
@@ -114,6 +121,7 @@ export default function BookingPage() {
   };
 
   const handleSubmitAction = async () => {
+    if (readOnly) return;
     if (!activeBooking?._id) return;
     try {
       setResponding(true);
@@ -132,8 +140,21 @@ export default function BookingPage() {
     }
   };
 
+  const totalItems = bookings.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startItemIndex = totalItems === 0 ? 0 : (safeCurrentPage - 1) * PAGE_SIZE;
+  const endItemIndex = Math.min(startItemIndex + PAGE_SIZE, totalItems);
+  const paginatedBookings = useMemo(() => bookings.slice(startItemIndex, endItemIndex), [bookings, startItemIndex, endItemIndex]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const groupedBookings = useMemo(() => {
-    const enriched = bookings
+    const enriched = paginatedBookings
       .map((booking) => ({
         ...booking,
         displayDate: formatDate(booking?.date),
@@ -154,14 +175,16 @@ export default function BookingPage() {
       map.get(key).items.push(booking);
     });
     return Array.from(map.values());
-  }, [bookings]);
+  }, [paginatedBookings]);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Quản lý booking thử đồ</h2>
-          <p className="text-sm text-slate-600">Xử lý và phản hồi booking của khách</p>
+          <p className="text-sm text-slate-600">
+            {readOnly ? 'Theo dõi danh sách booking thử đồ (chỉ xem)' : 'Xử lý và phản hồi booking của khách'}
+          </p>
         </div>
 
         <select
@@ -208,18 +231,50 @@ export default function BookingPage() {
                 key={booking._id}
                 booking={booking}
                 nearTime={isNearTime(booking)}
+                canRespond={!readOnly}
                 onDetail={(item) => openModal(item, 'view')}
-                onConfirm={(item) => openModal(item, 'confirm')}
-                onReject={(item) => openModal(item, 'reject')}
+                onConfirm={readOnly ? undefined : (item) => openModal(item, 'confirm')}
+                onReject={readOnly ? undefined : (item) => openModal(item, 'reject')}
               />
             ))}
           </section>
         ))}
 
+      {!loading && bookings.length > 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm text-slate-600">
+              Hiển thị {startItemIndex + 1}-{endItemIndex} trên tổng {totalItems} booking
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={safeCurrentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-2 text-sm font-medium text-slate-700">
+                Trang {safeCurrentPage}/{totalPages}
+              </span>
+              <button
+                type="button"
+                className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={safeCurrentPage === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <BookingActionModal
         open={Boolean(activeBooking)}
         booking={activeBooking}
-        mode={modalMode}
+        mode={readOnly ? 'view' : modalMode}
         status={respondStatus}
         note={staffNote}
         onChangeStatus={setRespondStatus}

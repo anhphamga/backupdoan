@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Heart, ShoppingCart, User } from "lucide-react";
+import { Bell, Heart, ShoppingCart, User } from "lucide-react";
 import logo from "../../assets/logo/logo.png";
 import { useBuyCart } from "../../contexts/BuyCartContext";
 import { useRentalCart } from "../../contexts/RentalCartContext";
@@ -46,7 +46,7 @@ const RENT_MEGA_MENU = [
   {
     title: "Khám phá nhanh",
     items: [
-      { label: "Sản phẩm nổi bật", to: "/#rent" },
+      { label: "Sản phẩm nổi bật", to: "/buy?purpose=rent&sort=top_liked" },
       { label: "Ưu đãi hiện tại", to: "/#promo" },
       { label: "Hướng dẫn khách du lịch", to: "/blog" },
     ],
@@ -60,13 +60,20 @@ export default function Header({ active = "", onSectionNavigate }) {
   const { itemCount: buyItemCount } = useBuyCart() || { itemCount: 0 };
   const { isAuthenticated, logout, user } = useAuth();
   const menuRef = useRef(null);
+  const notificationRef = useRef(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
   const isHomePage = location.pathname === "/";
   const dashboardPath = getRouteByRole(user?.role);
   const totalCartCount = Number(itemCount || 0) + Number(buyItemCount || 0);
   const cartPath = "/cart";
+  const isCustomer = isAuthenticated && !isDashboardRole(user?.role);
+  const customerNotifications = [
+    { id: "n1", text: "Theo dõi đơn hàng ở mục Lịch sử đơn hàng." },
+    { id: "n2", text: "Bạn có thể lưu trang phục ở mục Yêu thích để đặt nhanh." },
+  ];
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -78,6 +85,9 @@ export default function Header({ active = "", onSectionNavigate }) {
     const handleOutsideClick = (event) => {
       if (!menuRef.current?.contains(event.target)) {
         setMenuOpen(false);
+      }
+      if (!notificationRef.current?.contains(event.target)) {
+        setNotificationOpen(false);
       }
     };
 
@@ -142,6 +152,28 @@ export default function Header({ active = "", onSectionNavigate }) {
             <ShoppingCart size={18} />
             {totalCartCount > 0 && <span className="site-pill-count">{totalCartCount}</span>}
           </Link>
+
+          {isCustomer ? (
+            <div className="site-account" ref={notificationRef}>
+              <button
+                type="button"
+                className="site-account-trigger"
+                onClick={() => setNotificationOpen((prev) => !prev)}
+                aria-label="Thông báo"
+              >
+                <Bell size={18} />
+              </button>
+
+              {notificationOpen && (
+                <div className="site-account-menu">
+                  <div className="site-account-item"><strong>Thông báo</strong></div>
+                  {customerNotifications.map((item) => (
+                    <div key={item.id} className="site-account-item">{item.text}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {isAuthenticated ? (
             <div className="site-account" ref={menuRef}>

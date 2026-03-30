@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Heart } from "lucide-react";
+import { Heart, Loader2 } from "lucide-react";
 
 function GalleryImage({ src, alt, className, fallbackClassName = "" }) {
   const [hasError, setHasError] = useState(false);
@@ -24,6 +24,7 @@ export default function ProductGallery({
   loading = false,
   productName = "Product image",
   isFavorite = false,
+  favoriteLoading = false,
   onToggleFavorite,
 }) {
   const safeImages = useMemo(() => (Array.isArray(images) ? images.filter(Boolean) : []), [images]);
@@ -79,12 +80,17 @@ export default function ProductGallery({
             type="button"
             aria-label="Save to wishlist"
             onClick={onToggleFavorite}
+            disabled={favoriteLoading}
             className={`absolute right-3 top-11 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border bg-white/90 shadow-sm transition ${isFavorite
               ? "border-rose-300 text-rose-500"
               : "border-white/80 text-slate-500 hover:text-rose-500"
-              }`}
+              } ${favoriteLoading ? "cursor-not-allowed opacity-70" : ""}`}
           >
-            <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
+            {favoriteLoading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
+            )}
           </button>
           {mainImage ? (
             <GalleryImage

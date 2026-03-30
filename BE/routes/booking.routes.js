@@ -6,6 +6,6 @@ const router = express.Router();
 
 router.post('/', bookingController.createBooking);
 router.get('/', requireAuth, authorize('owner', 'staff'), bookingController.listBookings);
-router.patch('/:id/respond', requireAuth, authorize('owner', 'staff'), bookingController.respondBooking);
+router.patch('/:id/respond', requireAuth, authorize('staff'), bookingController.respondBooking);
 
 module.exports = router;

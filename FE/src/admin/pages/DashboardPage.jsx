@@ -4,7 +4,7 @@ import { useTranslate } from '../../hooks/useTranslate';
 import SectionCard from '../components/SectionCard';
 import StatCard from '../components/StatCard';
 
-const formatMoney = (value) => `${Number(value || 0).toLocaleString('vi-VN')}Ä‘`;
+const formatMoney = (value) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
 
 export default function DashboardPage({ user }) {
   const { t } = useTranslate();

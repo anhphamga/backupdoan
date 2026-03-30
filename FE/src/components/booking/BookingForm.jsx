@@ -177,10 +177,7 @@ export default function BookingForm({ onCancel, onSuccess, selectedProduct = nul
         onCancel?.();
       }, 1200);
     } catch (err) {
-      const status = err?.response?.status;
-      if (status === 401) setError('Vui lòng đăng nhập tài khoản khách hàng để đặt lịch.');
-      else if (status === 403) setError('Chỉ tài khoản khách hàng mới có thể đặt lịch thử đồ.');
-      else setError(err?.response?.data?.message || err.message || 'Đã có lỗi xảy ra.');
+      setError(err?.response?.data?.message || err.message || 'Không thể đặt lịch thử đồ lúc này. Vui lòng thử lại.');
     } finally {
       setSubmitting(false);
     }
