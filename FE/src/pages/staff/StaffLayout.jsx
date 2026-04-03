@@ -1,6 +1,7 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { getAlertsApi } from "../../services/alert.service";
 
 const formatDate = (date) => {
   const d = new Date(date);
@@ -18,6 +19,9 @@ export default function StaffLayout({ children }) {
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
   const notificationRef = useRef(null);
 
   useEffect(() => {
@@ -40,6 +44,32 @@ export default function StaffLayout({ children }) {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!notificationOpen) return;
+    let active = true;
+
+    const fetchNotifications = async () => {
+      try {
+        setNotificationsLoading(true);
+        setNotificationsError("");
+        const response = await getAlertsApi({ page: 1, limit: 8 });
+        if (!active) return;
+        setNotifications(Array.isArray(response?.data) ? response.data : []);
+      } catch (apiError) {
+        if (!active) return;
+        setNotificationsError(apiError?.response?.data?.message || "Không thể tải thông báo");
+        setNotifications([]);
+      } finally {
+        if (active) setNotificationsLoading(false);
+      }
+    };
+
+    fetchNotifications();
+    return () => {
+      active = false;
+    };
+  }, [notificationOpen]);
+
   const handleLogout = async () => {
     await logout();
     navigate("/work/login?role=staff", { replace: true });
@@ -60,7 +90,9 @@ export default function StaffLayout({ children }) {
     <div className="flex min-h-screen bg-white">
       <aside className="flex w-56 flex-col border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 px-6 py-5">
-          <h1 className="text-xl font-bold text-indigo-600">INHERE Nhân sự</h1>
+          <Link to="/" className="text-xl font-bold text-indigo-600 hover:opacity-90">
+            INHERE Nhân sự
+          </Link>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-4">
@@ -86,6 +118,15 @@ export default function StaffLayout({ children }) {
         </nav>
 
         <div className="space-y-2 border-t border-gray-200 p-4">
+          <Link
+            to="/"
+            className="flex items-center gap-3 rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-50"
+          >
+            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded bg-gray-100 text-xs font-bold">
+              HM
+            </span>
+            Trang chủ
+          </Link>
           <Link
             to="/profile"
             className="flex items-center gap-3 rounded-lg px-4 py-2 text-gray-600 hover:bg-gray-50"
@@ -139,8 +180,30 @@ export default function StaffLayout({ children }) {
             
             {notificationOpen && (
               <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-lg">
-               <div className="border-b border-gray-200 p-4 font-semibold">Thông báo</div>
-               <div className="px-4 py-3 text-sm text-gray-500 text-center">Không có thông báo mới</div>
+                <div className="border-b border-gray-200 p-4 font-semibold">Thông báo</div>
+
+                {notificationsLoading ? (
+                  <div className="px-4 py-3 text-sm text-gray-500 text-center">Đang tải thông báo...</div>
+                ) : null}
+
+                {notificationsError ? (
+                  <div className="px-4 py-3 text-sm text-red-600 text-center">{notificationsError}</div>
+                ) : null}
+
+                {!notificationsLoading && !notificationsError && notifications.length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-gray-500 text-center">Không có thông báo mới</div>
+                ) : null}
+
+                {!notificationsLoading && !notificationsError && notifications.length > 0 ? (
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.map((item) => (
+                      <div key={item?._id || `${item?.createdAt}-${item?.message}`} className="border-b border-gray-100 px-4 py-3 text-left last:border-0">
+                        <div className="mb-1 text-[11px] font-semibold text-gray-500">{item?.type || "Thông báo"}</div>
+                        <div className="text-sm text-gray-800">{item?.message || "Không có nội dung thông báo"}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             )}
           </button>
