@@ -20,6 +20,7 @@ import Header from '../components/common/Header'
 import { useAuth } from '../contexts/AuthContext'
 import { getMySaleOrdersApi } from '../services/order.service'
 import { getMyRentOrdersApi } from '../services/rent-order.service'
+import { UI_IMAGE_FALLBACKS } from '../constants/ui'
 
 const ORDER_TYPE_TABS = [
   { value: 'all', label: 'Tất cả' },
@@ -174,7 +175,7 @@ function getProductName(product) {
 function getImageUrl(value) {
   if (Array.isArray(value) && value[0]) return value[0]
   if (typeof value === 'string' && value.trim()) return value
-  return 'https://placehold.co/160x160/f8fafc/64748b?text=INHERE'
+  return UI_IMAGE_FALLBACKS.reviewImage
 }
 
 function normalizePaymentMethod(value, fallback = 'Theo quy trình thanh toán') {

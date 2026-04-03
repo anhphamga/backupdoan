@@ -19,8 +19,8 @@ import OwnerLayout from '../pages/owner/OwnerLayout'
 import OwnerAlertsScreen from '../pages/owner/OwnerAlertsScreen'
 import OwnerAnalyticsScreen from '../pages/owner/OwnerAnalyticsScreen'
 import OwnerDashboardScreen from '../pages/owner/OwnerDashboardScreen'
-import OwnerMembershipScreen from '../pages/owner/OwnerMembershipScreen'
 import OwnerOrdersScreen from '../pages/owner/OwnerOrdersScreen'
+import OwnerRentOrdersScreen from '../pages/owner/OwnerRentOrdersScreen'
 import OwnerProductDetailScreen from '../pages/owner/OwnerProductDetailScreen'
 import OwnerProductsScreen from '../pages/owner/OwnerProductsScreen'
 import OwnerCategoriesScreen from '../pages/owner/OwnerCategoriesScreen'
@@ -90,10 +90,10 @@ const AppRoutes = () => {
                     <Route path="staff-calendar" element={<OwnerShiftsScreen />} />
                     <Route path="staff-analytics" element={<OwnerAnalyticsScreen />} />
                     <Route path="orders" element={<OwnerOrdersScreen />} />
+                    <Route path="rent-orders" element={<OwnerRentOrdersScreen />} />
                     <Route path="reviews" element={<OwnerReviewsScreen />} />
                     <Route path="blogs" element={<OwnerBlogsScreen />} />
                     <Route path="promotions" element={<OwnerPromotionsScreen />} />
-                    <Route path="membership" element={<OwnerMembershipScreen />} />
                     <Route path="alerts" element={<OwnerAlertsScreen />} />
                     <Route path="reports" element={<OwnerReportsScreen />} />
                 </Route>

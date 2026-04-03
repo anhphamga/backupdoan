@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
+const { jwtAccessSecret, jwtRefreshSecret } = require('../config/security.config');
 
-const getAccessTokenSecret = () => process.env.JWT_ACCESS_SECRET || 'dev_access_secret_change_me';
-const getRefreshTokenSecret = () => process.env.JWT_REFRESH_SECRET || 'dev_refresh_secret_change_me';
+const getAccessTokenSecret = () => jwtAccessSecret;
+const getRefreshTokenSecret = () => jwtRefreshSecret;
 
 const signAccessToken = (payload) => {
   return jwt.sign(payload, getAccessTokenSecret(), { expiresIn: '15m' });

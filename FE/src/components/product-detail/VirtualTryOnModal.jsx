@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Upload, Loader2 } from "lucide-react";
+import { API_BASE_URL } from "../../config/env";
 
 /**
  * Virtual Try-On Modal Component
@@ -19,7 +20,7 @@ import { X, Upload, Loader2 } from "lucide-react";
  */
 
 export default function VirtualTryOnModal({ isOpen, onClose, outfitImageUrl }) {
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:9000/api";
+    const apiBaseUrl = API_BASE_URL;
     const [personImage, setPersonImage] = useState(null);
     const [outfitImage, setOutfitImage] = useState(null);
     const [personPreview, setPersonPreview] = useState("");
@@ -160,7 +161,7 @@ export default function VirtualTryOnModal({ isOpen, onClose, outfitImageUrl }) {
     };
 
     const urlToFile = async (url, filename) => {
-        const proxyUrl = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:9000/api"}/virtual-try-on/proxy-image?url=${encodeURIComponent(url)}`;
+        const proxyUrl = `${API_BASE_URL}/virtual-try-on/proxy-image?url=${encodeURIComponent(url)}`;
         const response = await fetch(proxyUrl);
 
         if (!response.ok) {

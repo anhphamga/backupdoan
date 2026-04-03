@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { ORDER_TYPE } = require('../constants/order.constants');
 
 const saleOrderSchema = new mongoose.Schema({
   customerId: {
@@ -24,8 +25,8 @@ const saleOrderSchema = new mongoose.Schema({
   },
   orderType: {
     type: String,
-    enum: ['Buy', 'Rent'],
-    default: 'Buy'
+    enum: [ORDER_TYPE.BUY, ORDER_TYPE.RENT],
+    default: ORDER_TYPE.BUY
   },
   guestName: {
     type: String,

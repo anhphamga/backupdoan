@@ -1,6 +1,7 @@
 const { ChromaClient, getEmbeddingFunction } = require('chromadb');
 const ChatbotError = require('../utils/chatbotError');
 const logger = require('../utils/logger');
+const { chromaUrl } = require('../../../config/app.config');
 
 const toNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -9,7 +10,6 @@ const toNumber = (value, fallback) => {
 
 class ChromaVectorStore {
   constructor() {
-    const chromaUrl = process.env.CHROMA_URL || 'http://127.0.0.1:8000';
     const parsedUrl = new URL(chromaUrl);
 
     this.collectionName = process.env.CHATBOT_CHROMA_COLLECTION || 'inhere_chatbot_knowledge';

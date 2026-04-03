@@ -25,6 +25,8 @@ const {
   REVIEWABLE_SALE_STATUSES,
   getReviewedMapForOrders,
 } = require('../services/review.service');
+const { ORDER_TYPE } = require('../constants/order.constants');
+const { frontendUrl } = require('../config/app.config');
 
 const normalizePaymentMethod = (value = '') => {
   if (value === 'BankTransfer') return 'BankTransfer';
@@ -192,7 +194,7 @@ const createSaleOrderWithItems = async ({
     shippingFee,
     shippingAddress,
     shippingPhone,
-    orderType: 'Buy',
+    orderType: ORDER_TYPE.BUY,
     guestName,
     guestEmail,
     guestVerificationMethod,
@@ -449,7 +451,6 @@ const getProductDisplayName = (product = {}) => {
 };
 
 const buildOrderEmailPayload = ({ saleOrder, items, customer }) => {
-  const frontendUrl = String(process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
   const orderUrl = `${frontendUrl}/cart`;
 
   return {
@@ -820,7 +821,7 @@ exports.getOwnerSaleOrders = async (req, res) => {
     const currentPage = Math.max(Number(page) || 1, 1);
     const pageSize = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
-    const query = { orderType: 'Buy' };
+    const query = { orderType: ORDER_TYPE.BUY };
     if (normalizedStatus && SALE_ORDER_ALLOWED_STATUSES.has(normalizedStatus)) {
       query.status = normalizedStatus;
     }
@@ -901,7 +902,7 @@ exports.getMySaleOrders = async (req, res) => {
     const normalizedStatus = String(status || '').trim();
     const query = {
       customerId,
-      orderType: 'Buy',
+      orderType: ORDER_TYPE.BUY,
     };
 
     if (normalizedStatus && SALE_ORDER_ALLOWED_STATUSES.has(normalizedStatus)) {
@@ -943,7 +944,7 @@ exports.getMySaleOrderById = async (req, res) => {
     const order = await SaleOrder.findOne({
       _id: id,
       customerId,
-      orderType: 'Buy',
+      orderType: ORDER_TYPE.BUY,
     })
       .populate('customerId', 'name phone email')
       .populate('staffId', 'name phone email')
@@ -986,7 +987,7 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
     }
 
     const order = await SaleOrder.findById(id);
-    if (!order || order.orderType !== 'Buy') {
+    if (!order || order.orderType !== ORDER_TYPE.BUY) {
       return res.status(404).json({
         success: false,
         message: 'Khong tim thay don mua.',

@@ -6,6 +6,7 @@ import ReviewForm from '../components/review/ReviewForm'
 import { useAuth } from '../contexts/AuthContext'
 import { getMySaleOrderByIdApi } from '../services/order.service'
 import { createReviewApi, updateReviewApi } from '../services/review.service'
+import { UI_IMAGE_FALLBACKS } from '../constants/ui'
 
 const statusClassMap = {
   PendingConfirmation: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -51,7 +52,7 @@ function getPaymentMethodLabel(value) {
 
 function getImageUrl(value) {
   if (Array.isArray(value) && value[0]) return value[0]
-  return 'https://placehold.co/160x160/f8fafc/64748b?text=INHERE'
+  return UI_IMAGE_FALLBACKS.reviewImage
 }
 
 export default function OrderDetailPage() {
