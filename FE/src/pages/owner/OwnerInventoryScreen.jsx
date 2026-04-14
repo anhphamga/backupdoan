@@ -31,7 +31,8 @@ const lifecycleStatusOptions = [
   { value: 'Rented', label: 'Đang thuê' },
   { value: 'Washing', label: 'Đang giặt' },
   { value: 'Repair', label: 'Đang sửa' },
-  { value: 'Lost', label: 'Mất' }
+  { value: 'Lost', label: 'Mất' },
+  { value: 'Sold', label: 'Đã bán' }
 ]
 
 const lifecycleStatusColors = {
@@ -40,7 +41,8 @@ const lifecycleStatusColors = {
   Rented: 'bg-purple-100 text-purple-800',
   Washing: 'bg-cyan-100 text-cyan-800',
   Repair: 'bg-orange-100 text-orange-800',
-  Lost: 'bg-red-100 text-red-800'
+  Lost: 'bg-red-100 text-red-800',
+  Sold: 'bg-slate-100 text-slate-700'
 }
 
 export default function OwnerInventoryScreen() {
@@ -55,6 +57,7 @@ export default function OwnerInventoryScreen() {
   const [conditionLevel, setConditionLevel] = useState(searchParams.get('conditionLevel') || '')
   const [lifecycleStatus, setLifecycleStatus] = useState(searchParams.get('lifecycleStatus') || '')
   const [search, setSearch] = useState(searchParams.get('search') || '')
+  const pageParam = searchParams.get('page') || '1'
 
   // Edit states
   const [editingId, setEditingId] = useState(null)
@@ -67,7 +70,7 @@ export default function OwnerInventoryScreen() {
       setError('')
 
       const params = new URLSearchParams()
-      params.append('page', searchParams.get('page') || 1)
+      params.append('page', pageParam)
       params.append('limit', 20)
       if (conditionLevel) params.append('conditionLevel', conditionLevel)
       if (lifecycleStatus) params.append('lifecycleStatus', lifecycleStatus)
@@ -82,12 +85,11 @@ export default function OwnerInventoryScreen() {
     } finally {
       setLoading(false)
     }
-  }, [conditionLevel, lifecycleStatus, search])
+  }, [conditionLevel, lifecycleStatus, search, pageParam])
 
   useEffect(() => {
-    const page = searchParams.get('page') || 1
     fetchInstances()
-  }, [searchParams.get('page'), conditionLevel, lifecycleStatus, search, fetchInstances])
+  }, [fetchInstances])
 
   // Handle filter change
   const handleFilterChange = (newFilters) => {
@@ -330,6 +332,7 @@ export default function OwnerInventoryScreen() {
                           <option value="Washing">Đang giặt</option>
                           <option value="Repair">Đang sửa</option>
                           <option value="Lost">Mất</option>
+                          <option value="Sold">Đã bán</option>
                         </select>
                       ) : (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${lifecycleStatusColors[instance.lifecycleStatus] || 'bg-gray-100'}`}>
@@ -338,7 +341,8 @@ export default function OwnerInventoryScreen() {
                            instance.lifecycleStatus === 'Rented' ? 'Đang thuê' :
                            instance.lifecycleStatus === 'Washing' ? 'Đang giặt' :
                            instance.lifecycleStatus === 'Repair' ? 'Đang sửa' :
-                           instance.lifecycleStatus === 'Lost' ? 'Mất' : instance.lifecycleStatus}
+                           instance.lifecycleStatus === 'Lost' ? 'Mất' :
+                           instance.lifecycleStatus === 'Sold' ? 'Đã bán' : instance.lifecycleStatus}
                         </span>
                       )}
                     </td>
