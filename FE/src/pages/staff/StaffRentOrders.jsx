@@ -62,6 +62,9 @@ export default function StaffRentOrders() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('')
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(10)
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 1 })
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
@@ -115,26 +118,28 @@ export default function StaffRentOrders() {
     try {
       setLoading(true)
       setError('')
-      const response = await getAllRentOrdersApi({})
-      const allOrders = response.data || []
-
-      // Filter locally if status selected
-      if (filterStatus) {
-        setOrders(allOrders.filter(o => o.status === filterStatus))
-      } else {
-        setOrders(allOrders)
-      }
+      const response = await getAllRentOrdersApi({
+        ...(filterStatus ? { status: filterStatus } : {}),
+        page,
+        limit,
+      })
+      setOrders(response.data || [])
+      setPagination(response.pagination || { page, limit, total: (response.data || []).length, pages: 1 })
     } catch (err) {
       console.error('Error fetching orders:', err)
       setError('Không thể tải danh sách đơn thuê')
     } finally {
       setLoading(false)
     }
-  }, [filterStatus])
+  }, [filterStatus, page, limit])
 
   useEffect(() => {
     fetchOrders()
   }, [fetchOrders])
+
+  useEffect(() => {
+    setPage(1)
+  }, [filterStatus, limit])
 
   const handleConfirm = async (orderId) => {
     setActionLoading(true)
@@ -439,7 +444,7 @@ export default function StaffRentOrders() {
             <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tổng đơn</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-950">{orders.length}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-950">{pagination.total || 0}</p>
               </div>
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">Đang thuê</p>
@@ -474,6 +479,19 @@ export default function StaffRentOrders() {
                   <option value="Compensation">Bồi thường</option>
                   <option value="Completed">Hoàn tất</option>
                   <option value="Cancelled">Đã hủy</option>
+                </select>
+              </div>
+              <div className="min-w-[180px]">
+                <label className="mb-2 block text-sm font-medium text-slate-700">Số dòng / trang</label>
+                <select
+                  value={limit}
+                  onChange={(e) => setLimit(parseInt(e.target.value || '10', 10))}
+                  className="h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
                 </select>
               </div>
               <button
@@ -518,7 +536,33 @@ export default function StaffRentOrders() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Danh sách đơn</p>
               <h3 className="mt-2 text-lg font-semibold text-slate-950">Đơn thuê hiện tại</h3>
             </div>
-            <div className="rounded-2xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">{orders.length} đơn</div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">
+                {pagination.total || 0} đơn
+              </div>
+              <div className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 sm:flex">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={loading || page <= 1}
+                  className={`rounded-xl px-2 py-1 transition ${loading || page <= 1 ? 'cursor-not-allowed text-slate-400' : 'text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Trước
+                </button>
+                <span className="text-slate-500">Trang</span>
+                <span className="text-slate-900">{page}</span>
+                <span className="text-slate-500">/</span>
+                <span className="text-slate-900">{pagination.pages || 1}</span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(pagination.pages || 1, p + 1))}
+                  disabled={loading || page >= (pagination.pages || 1)}
+                  className={`rounded-xl px-2 py-1 transition ${loading || page >= (pagination.pages || 1) ? 'cursor-not-allowed text-slate-400' : 'text-slate-700 hover:bg-slate-100'}`}
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
           </div>
 
           {loading ? (
@@ -563,6 +607,33 @@ export default function StaffRentOrders() {
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+          {!loading && (pagination.pages || 1) > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 text-sm">
+              <p className="text-slate-500">
+                Đang xem trang <span className="font-semibold text-slate-900">{page}</span> /{' '}
+                <span className="font-semibold text-slate-900">{pagination.pages || 1}</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className={`h-10 rounded-2xl px-4 font-semibold transition ${page <= 1 ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'}`}
+                >
+                  Trước
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(pagination.pages || 1, p + 1))}
+                  disabled={page >= (pagination.pages || 1)}
+                  className={`h-10 rounded-2xl px-4 font-semibold transition ${page >= (pagination.pages || 1) ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                >
+                  Sau
+                </button>
+              </div>
             </div>
           )}
         </div>
