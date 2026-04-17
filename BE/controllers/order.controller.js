@@ -145,6 +145,18 @@ const buildNormalizedSaleItems = (items = [], productMap = new Map()) => {
   });
 };
 
+// CHANGED: Validate products against unique product ids, because checkout items can repeat
+// the same productId across different conditions (New/Used) and still be valid.
+const getUniqueProductIds = (items = []) =>
+  Array.from(
+    new Set(
+      (Array.isArray(items) ? items : [])
+        .map((item) => item?.productId)
+        .filter(Boolean)
+        .map((id) => String(id))
+    )
+  );
+
 // Sale: chặn bán nếu instance còn nằm trong bất kỳ `RentOrderItem` chưa kết thúc (so với "today").
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const VN_TZ_OFFSET_MS = 7 * 60 * 60 * 1000; // UTC+7
@@ -220,7 +232,7 @@ const ensureSaleStockAvailable = async (normalizedItems = []) => {
   }
 };
 
-const assignSaleInstances = async (normalizedItems = [], session = null) => {
+const assignSaleInstances = async (normalizedItems = [], saleOrderId = null, session = null) => {
   const txOptions = session ? { session } : {};
 
   const requestedProductIds = Array.from(new Set(normalizedItems.map((i) => String(i.productId)))).map((id) => new mongoose.Types.ObjectId(id));
@@ -246,11 +258,76 @@ const assignSaleInstances = async (normalizedItems = [], session = null) => {
           conditionLevel,
           ...(blockedObjectIds.length ? { _id: { $nin: blockedObjectIds } } : {}),
         },
-        { lifecycleStatus: 'Sold' },
+        { lifecycleStatus: 'Sold', soldOrderId: saleOrderId || null },
         { new: true, sort: { conditionScore: -1 }, ...txOptions }
       );
       if (!instance) throw new Error('OUT_OF_STOCK');
     }
+  }
+};
+
+const normalizeSaleItemCondition = (value) => {
+  if (value === 'Used') return 'Used';
+  if (value === 'New') return 'New';
+  return null;
+};
+
+const releaseSaleOrderInstances = async (orderId, session = null) => {
+  if (!orderId) return;
+
+  const txOptions = session ? { session } : {};
+  const items = await SaleOrderItem.find({ orderId }).select('productId quantity conditionLevel').lean();
+  if (!items.length) return;
+
+  const grouped = new Map();
+  for (const item of items) {
+    const productId = String(item?.productId || '').trim();
+    if (!productId) continue;
+    const conditionLevel = normalizeSaleItemCondition(item?.conditionLevel);
+    const qty = Math.max(Number(item?.quantity || 1), 1);
+    const key = `${productId}::${conditionLevel || 'ANY'}`;
+    const current = grouped.get(key) || { productId, conditionLevel, quantity: 0 };
+    current.quantity += qty;
+    grouped.set(key, current);
+  }
+
+  for (const { productId, conditionLevel, quantity } of grouped.values()) {
+    let remaining = quantity;
+
+    const linkedQuery = {
+      productId: new mongoose.Types.ObjectId(productId),
+      lifecycleStatus: 'Sold',
+      soldOrderId: orderId,
+      ...(conditionLevel ? { conditionLevel } : {}),
+    };
+    const linkedInstances = await ProductInstance.find(linkedQuery).sort({ updatedAt: -1 }).limit(remaining).select('_id').lean();
+    if (linkedInstances.length > 0) {
+      const linkedIds = linkedInstances.map((item) => item._id);
+      await ProductInstance.updateMany(
+        { _id: { $in: linkedIds } },
+        { lifecycleStatus: 'Available', soldOrderId: null },
+        txOptions
+      );
+      remaining -= linkedIds.length;
+    }
+
+    if (remaining <= 0) continue;
+
+    const fallbackQuery = {
+      productId: new mongoose.Types.ObjectId(productId),
+      lifecycleStatus: 'Sold',
+      ...(conditionLevel ? { conditionLevel } : {}),
+      $or: [{ soldOrderId: null }, { soldOrderId: { $exists: false } }],
+    };
+    const fallbackInstances = await ProductInstance.find(fallbackQuery).sort({ updatedAt: -1 }).limit(remaining).select('_id').lean();
+    if (!fallbackInstances.length) continue;
+
+    const fallbackIds = fallbackInstances.map((item) => item._id);
+    await ProductInstance.updateMany(
+      { _id: { $in: fallbackIds } },
+      { lifecycleStatus: 'Available', soldOrderId: null },
+      txOptions
+    );
   }
 };
 
@@ -315,6 +392,7 @@ const createSaleOrderWithItems = async ({
       productId: item.productId,
       unitPrice: item.unitPrice,
       quantity: item.quantity,
+      conditionLevel: item.conditionLevel === 'Used' ? 'Used' : 'New',
       size: item.size,
       color: item.color,
       note: note ? `${item.note}${item.note ? ' | ' : ''}${note}` : item.note,
@@ -359,7 +437,7 @@ const runSaleCheckoutTransaction = async ({
 
   const runWithoutTransaction = async () => {
     const saleOrder = await createSaleOrderWithItems(createOrderPayload);
-    await assignSaleInstances(normalizedItems);
+    await assignSaleInstances(normalizedItems, saleOrder._id);
 
     if (voucherId) {
       await Voucher.findByIdAndUpdate(voucherId, {
@@ -384,7 +462,7 @@ const runSaleCheckoutTransaction = async ({
       session,
     });
 
-    await assignSaleInstances(normalizedItems, session);
+    await assignSaleInstances(normalizedItems, saleOrder._id, session);
 
     if (voucherId) {
       await Voucher.findByIdAndUpdate(
@@ -733,11 +811,12 @@ exports.guestCheckout = async (req, res) => {
       });
     }
 
-    const productIds = items.map((item) => item.productId).filter(Boolean);
-    const products = await Product.find({ _id: { $in: productIds }, isDraft: { $ne: true } }).lean();
+    // CHANGED: use unique product ids to avoid false invalid-product errors for same product with different conditions.
+    const uniqueProductIds = getUniqueProductIds(items);
+    const products = await Product.find({ _id: { $in: uniqueProductIds }, isDraft: { $ne: true } }).lean();
     const productMap = new Map(products.map((product) => [String(product._id), product]));
 
-    if (productMap.size !== productIds.length) {
+    if (productMap.size !== uniqueProductIds.length) {
       return res.status(400).json({ success: false, message: 'Có sản phẩm không hợp lệ hoặc đã ngừng bán.' });
     }
 
@@ -879,11 +958,12 @@ exports.checkout = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email nhan hang khong hop le.' });
     }
 
-    const productIds = items.map((item) => item.productId).filter(Boolean);
-    const products = await Product.find({ _id: { $in: productIds }, isDraft: { $ne: true } }).lean();
+    // CHANGED: use unique product ids to avoid false invalid-product errors for same product with different conditions.
+    const uniqueProductIds = getUniqueProductIds(items);
+    const products = await Product.find({ _id: { $in: uniqueProductIds }, isDraft: { $ne: true } }).lean();
     const productMap = new Map(products.map((product) => [String(product._id), product]));
 
-    if (productMap.size !== productIds.length) {
+    if (productMap.size !== uniqueProductIds.length) {
       return res.status(400).json({ success: false, message: 'Co san pham khong hop le hoac da ngung ban.' });
     }
 
@@ -955,7 +1035,7 @@ exports.checkout = async (req, res) => {
     const message = error.message === 'INVALID_PRODUCT_DATA'
       ? 'Khong the xac thuc du lieu san pham trong gio hang.'
       : error.message === 'OUT_OF_STOCK'
-        ? 'Co san pham da het hang hoac khong du so luong de mua.'
+        ? 'Có sản phẩm đã hết hàng hoặc không đủ số lượng để mua.'
         : 'Khong the tao don mua luc nay.';
 
     const statusCode = (error.message === 'INVALID_PRODUCT_DATA' || error.message === 'OUT_OF_STOCK') ? 400 : 500;
@@ -1218,6 +1298,80 @@ exports.getGuestSaleOrderById = async (req, res) => {
   }
 };
 
+exports.cancelMySaleOrder = async (req, res) => {
+  try {
+    const customerId = req.user?.id;
+    const { id } = req.params;
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
+    const order = await SaleOrder.findOne({
+      _id: id,
+      customerId,
+      orderType: ORDER_TYPE.BUY,
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Khong tim thay don mua.',
+      });
+    }
+
+    if (order.status === 'Cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Don hang da o trang thai nay.',
+      });
+    }
+
+    if (!['PendingPayment', 'PendingConfirmation'].includes(String(order.status || ''))) {
+      return res.status(400).json({
+        success: false,
+        message: `Khong the huy don o trang thai "${order.status}".`,
+      });
+    }
+
+    await releaseSaleOrderInstances(order._id);
+
+    order.status = 'Cancelled';
+    order.userStatus = resolveSaleOrderUserStatus('Cancelled', order.userStatus);
+    order.history = Array.isArray(order.history) ? order.history : [];
+    order.history.push({
+      status: 'Cancelled',
+      action: 'customer_cancel',
+      description: 'Khach hang da huy don',
+      updatedBy: customerId,
+      updatedAt: new Date(),
+    });
+    await order.save();
+
+    const [populated] = await attachSaleOrderItems([
+      await SaleOrder.findById(id)
+        .populate('customerId', 'name phone email')
+        .populate('staffId', 'name phone email')
+        .populate('history.updatedBy', 'name email'),
+    ]);
+
+    return res.json({
+      success: true,
+      message: 'Huy don thanh cong.',
+      data: mapSaleOrderForOwner(populated, { customerFacing: true }),
+    });
+  } catch (error) {
+    console.error('Cancel my sale order error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Khong the huy don mua luc nay.',
+    });
+  }
+};
+
 exports.updateOwnerSaleOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1253,6 +1407,10 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
         message: `Khong the chuyen tu ${order.status} sang ${normalizedStatus}.`,
         allowedNextStatuses,
       });
+    }
+
+    if (normalizedStatus === 'Cancelled') {
+      await releaseSaleOrderInstances(order._id);
     }
 
     if (isRefundedSaleStatus(normalizedStatus)) {
@@ -1308,3 +1466,6 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
     });
   }
 };
+
+
+
