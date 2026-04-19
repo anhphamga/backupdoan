@@ -25,6 +25,14 @@ const getChatbotSessionId = () => {
   }
 }
 
+export const resetChatbotSession = () => {
+  try {
+    localStorage.removeItem(CHATBOT_SESSION_ID_KEY)
+  } catch {
+    // ignore storage write errors
+  }
+}
+
 export const sendChatMessage = async ({ message, topK = 4 }) => {
   const sessionId = getChatbotSessionId()
 

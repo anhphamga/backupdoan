@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { sendChatMessage } from '../../api/chatbotApi'
+import { resetChatbotSession, sendChatMessage } from '../../api/chatbotApi'
 
 const MAX_INPUT_LENGTH = 1200
 const CHAT_HISTORY_KEY = 'inhere_chatbot_history_v1'
@@ -135,9 +135,12 @@ function Chatbot() {
     const hadToken = hadTokenRef.current
     const hasTokenNow = Boolean(token)
 
-    if (hadToken && !hasTokenNow) {
+    if (hadToken !== hasTokenNow) {
       localStorage.removeItem(CHAT_HISTORY_KEY)
       setMessages(initialMessages)
+      setError('')
+      setInput('')
+      resetChatbotSession()
     }
 
     hadTokenRef.current = hasTokenNow
@@ -262,10 +265,19 @@ function Chatbot() {
       <div className='fixed bottom-5 right-5 z-[60]'>
         <button
           type='button'
-          className='cursor-pointer rounded-full bg-gradient-to-br from-teal-700 to-emerald-800 px-4 py-3 font-semibold text-white shadow-[0_12px_30px_rgba(6,95,70,0.3)]'
+          className='group flex cursor-pointer items-center gap-2 rounded-full border border-emerald-200/70 bg-white px-2.5 py-2 pr-3 text-left shadow-[0_14px_36px_rgba(6,95,70,0.2)] backdrop-blur transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(6,95,70,0.28)]'
           onClick={() => setOpen(true)}
+          aria-label='Mở trợ lý tư vấn INHERE'
         >
-          Chatbot
+          <span className='flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-700 to-emerald-700 text-white shadow-[0_8px_16px_rgba(13,148,136,0.35)]'>
+            <svg viewBox='0 0 20 20' className='h-4.5 w-4.5' fill='none' stroke='currentColor' strokeWidth='1.8'>
+              <path d='M4 6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H9.7l-2.8 2.4c-.5.4-1.2 0-.9-.7l.7-1.7H6a2 2 0 0 1-2-2v-4Z' strokeLinecap='round' strokeLinejoin='round' />
+            </svg>
+          </span>
+          <span className='flex flex-col leading-tight'>
+            <span className='text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700'>INHERE</span>
+            <span className='text-[13px] font-bold text-slate-800'>Tư vấn nhanh</span>
+          </span>
         </button>
       </div>
     )
@@ -277,7 +289,7 @@ function Chatbot() {
         className={`flex flex-col overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-b from-emerald-50 to-teal-50 shadow-[0_20px_40px_rgba(15,118,110,0.2)] ${expanded ? 'h-[min(88vh,760px)] w-[min(92vw,760px)]' : 'h-[min(520px,calc(100vh-86px))] w-[min(360px,calc(100vw-24px))]'}`}
       >
         <div className='flex items-center justify-between bg-teal-700 px-3.5 py-3 font-bold text-white'>
-          <span>InHere Chatbot</span>
+          <span>InHere</span>
           <div className='flex items-center gap-2'>
             <button
               type='button'
