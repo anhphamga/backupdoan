@@ -19,6 +19,14 @@ import { useBuyCart } from "../../contexts/BuyCartContext";
 import { useFavorites } from "../../contexts/FavoritesContext";
 
 const DEFAULT_FILTERS = { category: "", color: "", size: "", price: "" };
+const DEFAULT_PAGINATION = { page: 1, totalPages: 1, totalItems: 0, limit: 24 };
+
+const extractProductList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.products)) return payload.products;
+  return [];
+};
 
 const priceInRange = (price, range) => {
   if (!range) return true;
@@ -39,7 +47,7 @@ export default function ShopPage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [sortBy, setSortBy] = useState("newest");
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, totalItems: 0, limit: 24 });
+  const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
   const [loading, setLoading] = useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
@@ -102,10 +110,12 @@ export default function ShopPage() {
         if (searchKeyword) params.set("search", searchKeyword);
         if (filters.category) params.set("category", filters.category);
         const response = await fetch(`/api/products?${params.toString()}`);
-        const payload = response.ok ? await response.json() : { data: [] };
+        const payload = response.ok ? await response.json() : null;
         if (!mounted) return;
-        setProducts(Array.isArray(payload?.data) ? payload.data : []);
-        setPagination(payload?.pagination || { page: 1, totalPages: 1, totalItems: 0, limit: 24 });
+        const apiResponseData = extractProductList(payload);
+        console.log("Products:", apiResponseData);
+        setProducts(Array.isArray(apiResponseData) ? apiResponseData : []);
+        setPagination(payload?.pagination || DEFAULT_PAGINATION);
       } finally {
         if (mounted) setLoading(false);
       }
