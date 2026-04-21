@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { getRouteByRole, isDashboardRole } from '../../utils/auth'
 import axiosClient from '../../config/axios'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, setAuthToken } from '../../config/axios'
 import { loginSchema } from '../../validations/login.schema'
 import { mapZodErrors, toTrimmedText } from '../../utils/validation/validation.rules'
 import Header from '../../components/common/Header'
@@ -13,6 +14,7 @@ import '../../style/AuthPages.css'
 const PHONE_REGEX_VN = /^0\d{9}$/
 const normalizeIdentifierInput = (value = '') => toTrimmedText(value).replace(/\s+/g, ' ')
 const normalizeIdentifierForPhone = (value = '') => normalizeIdentifierInput(value).replace(/\s+/g, '')
+const USER_KEY = 'inhere_user'
 
 const LoginPage = () => {
   const navigate = useNavigate()
@@ -96,25 +98,65 @@ const LoginPage = () => {
         credential: response.credential,
         portal: 'customer'
       })
-      console.log('Google login success', res.data)
+
+      const payload = res?.data?.data || res?.data || {}
+      const accessToken = payload.accessToken
+      const refreshToken = payload.refreshToken
+      const user = payload.user
+
+      if (!accessToken || !user) {
+        throw new Error('Google login response missing accessToken or user')
+      }
+
+      localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
+      if (refreshToken) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+      }
+
+      if (form.rememberMe) {
+        localStorage.setItem(USER_KEY, JSON.stringify(user))
+        sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+        sessionStorage.removeItem(USER_KEY)
+      } else {
+        sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
+        sessionStorage.setItem(USER_KEY, JSON.stringify(user))
+        localStorage.removeItem(USER_KEY)
+      }
+
+      setAuthToken(accessToken)
+      const fallbackPath = getRouteByRole(user.role)
+      const enforceRoleDashboard = isDashboardRole(user.role)
+      const targetPath = enforceRoleDashboard ? fallbackPath : (redirectPath || fallbackPath)
+      navigate(targetPath, { replace: true })
     } catch (err) {
       console.error('Google login failed', err)
+      setError('Đăng nhập Google thất bại')
     }
   }
+
   useEffect(() => {
-    if (!window.google) return
-    window.google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      callback: handleCredentialResponse,
-    })
-    window.google.accounts.id.renderButton(
-      document.getElementById('googleBtn'),
-      {
-        theme: 'outline',
-        size: 'large',
-        width: '100%'
-      }
-    )
+    const initializeGoogle = () => {
+      if (!window.google || !import.meta.env.VITE_GOOGLE_CLIENT_ID) return false
+
+      window.google.accounts.id.initialize({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse,
+      })
+
+      window.google.accounts.id.renderButton(
+        document.getElementById('googleBtn'),
+        {
+          theme: 'outline',
+          size: 'large'
+        }
+      )
+
+      return true
+    }
+
+    if (initializeGoogle()) return
+    const timer = window.setTimeout(initializeGoogle, 300)
+    return () => window.clearTimeout(timer)
   }, [])
 
   const normalizeLoginError = (apiError) => {
