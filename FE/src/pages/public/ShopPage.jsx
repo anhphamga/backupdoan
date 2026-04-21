@@ -17,6 +17,7 @@ import {
 } from "./catalogHelpers";
 import { useBuyCart } from "../../contexts/BuyCartContext";
 import { useFavorites } from "../../contexts/FavoritesContext";
+import { API_BASE_URL } from "../../config/env";
 
 const DEFAULT_FILTERS = { category: "", color: "", size: "", price: "" };
 const DEFAULT_PAGINATION = { page: 1, totalPages: 1, totalItems: 0, limit: 24 };
@@ -29,6 +30,8 @@ const extractProductList = (payload) => {
   if (Array.isArray(payload?.products?.items)) return payload.products.items;
   return [];
 };
+
+const toApiUrl = (path) => `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
 const priceInRange = (price, range) => {
   if (!range) return true;
@@ -72,7 +75,7 @@ export default function ShopPage() {
     let mounted = true;
     const run = async () => {
       try {
-        const response = await fetch("/api/categories?lang=vi&purpose=buy");
+        const response = await fetch(toApiUrl("/categories?lang=vi&purpose=buy"));
         const payload = response.ok ? await response.json() : { categories: [] };
         if (!mounted) return;
         setCategories(Array.isArray(payload?.categories) ? payload.categories : []);
@@ -110,7 +113,7 @@ export default function ShopPage() {
         });
         if (searchKeyword) params.set("search", searchKeyword);
         if (filters.category) params.set("category", filters.category);
-        const response = await fetch(`/api/products?${params.toString()}`);
+        const response = await fetch(toApiUrl(`/products?${params.toString()}`));
         const payload = response.ok ? await response.json() : null;
         if (!mounted) return;
         const apiResponseData = extractProductList(payload);
