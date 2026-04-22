@@ -18,6 +18,7 @@ const {
   extractBearerToken,
 } = require('../utils/jwt');
 const { sendOrderConfirmationEmail } = require('../services/mailService');
+const { runPostPaymentInvoiceFlow } = require('../services/postPaymentInvoice.service');
 const {
   validateVoucher,
   getVoucherByCode,
@@ -50,7 +51,7 @@ const {
 
 const normalizePaymentMethod = (value = '') => {
   if (value === 'BankTransfer') return 'BankTransfer';
-  if (value === 'Online' || value === 'PayOS') return 'Online';
+  if (value === 'Online' || value === 'PayOS' || value === 'PayPal') return 'Online';
   return 'COD';
 };
 
@@ -128,7 +129,9 @@ const normalizeHistory = (order, options = {}) => {
       const shouldUseUserFacingReturned = customerFacing && isRefundedSaleStatus(status);
       return {
         status,
-        statusLabel: shouldUseUserFacingReturned ? userStatusLabel : statusMeta.label,
+        statusLabel: shouldUseUserFacingReturned
+          ? userStatusLabel
+          : (item?.statusLabel || statusMeta.label),
         userStatus,
         userStatusLabel,
         action: item?.action || '',
@@ -560,7 +563,7 @@ const runSaleCheckoutTransaction = async ({
         if (wantLog) {
           console.info(
             '[SaleCheckout] MongoDB không hỗ trợ transaction trên deployment này; đã bật chế độ không-transaction cho các lần checkout sau. ' +
-              'Tuỳ chọn: DISABLE_SALE_MONGO_TRANSACTIONS=true (bỏ thử transaction) hoặc dùng replica set / Atlas.',
+            'Tuỳ chọn: DISABLE_SALE_MONGO_TRANSACTIONS=true (bỏ thử transaction) hoặc dùng replica set / Atlas.',
             error?.message || error
           );
         }
@@ -829,10 +832,25 @@ exports.guestCheckout = async (req, res) => {
     }
 
     const verification = await GuestVerification.findById(tokenPayload.verificationId);
+
+    // Nếu token đã bị consumed, kiểm tra xem đơn hàng từ session đó có đang ở trạng thái
+    // Failed hoặc PendingPayment không (user muốn thử lại sau khi thanh toán online thất bại).
+    if (verification?.consumedAt) {
+      const retryableOrder = await SaleOrder.findOne({
+        guestVerificationId: verification._id,
+        status: { $in: ['Failed', 'PendingPayment'] },
+      }).lean();
+      if (!retryableOrder) {
+        return res.status(401).json({ success: false, message: 'Phiên xác minh guest không hợp lệ.' });
+      }
+      // Cho phép retry — reset consumedAt để checkout lại
+      verification.consumedAt = null;
+      await verification.save();
+    }
+
     if (
       !verification ||
       !verification.verified ||
-      verification.consumedAt ||
       verification.method !== tokenPayload.method
     ) {
       return res.status(401).json({ success: false, message: 'Phiên xác minh guest không hợp lệ.' });
@@ -916,29 +934,34 @@ exports.guestCheckout = async (req, res) => {
 
     const saleOrder = await runSaleCheckoutTransaction({
       createOrderPayload: {
-      customerId: guestUser?._id || null,
-      paymentMethod,
-      totalAmount,
-      shippingFee: normalizedShippingFee,
-      shippingAddress: normalizedAddress,
-      shippingPhone: normalizedPhone,
-      guestName: normalizedName,
-      guestEmail: verifiedEmail,
-      guestVerificationMethod: verification.method,
-      guestVerificationId: verification._id,
-      note,
-      items: normalizedItems,
-      idempotencyKey,
-      voucherCode: voucherApplication.voucherCode,
-      voucherId: voucherApplication.voucher?._id || null,
-      voucherSnapshot: voucherApplication.voucherSnapshot,
-      discountAmount: voucherApplication.discountAmount,
+        customerId: guestUser?._id || null,
+        paymentMethod,
+        totalAmount,
+        shippingFee: normalizedShippingFee,
+        shippingAddress: normalizedAddress,
+        shippingPhone: normalizedPhone,
+        guestName: normalizedName,
+        guestEmail: verifiedEmail,
+        guestVerificationMethod: verification.method,
+        guestVerificationId: verification._id,
+        note,
+        items: normalizedItems,
+        idempotencyKey,
+        voucherCode: voucherApplication.voucherCode,
+        voucherId: voucherApplication.voucher?._id || null,
+        voucherSnapshot: voucherApplication.voucherSnapshot,
+        discountAmount: voucherApplication.discountAmount,
       },
       voucherId: voucherApplication.voucher?._id || null,
     });
 
-    verification.consumedAt = new Date();
-    await verification.save();
+    // Chỉ consume token ngay với COD (không cần xác nhận thanh toán).
+    // Với online payment (PayOS/PayPal), giữ token để user có thể thử lại nếu cổng thanh toán thất bại.
+    const normalizedPaymentMethodForToken = normalizePaymentMethod(paymentMethod);
+    if (normalizedPaymentMethodForToken !== 'Online') {
+      verification.consumedAt = new Date();
+      await verification.save();
+    }
 
     await sendOrderConfirmationEmailSafely({
       saleOrder,
@@ -953,6 +976,14 @@ exports.guestCheckout = async (req, res) => {
       notifySaleOrderCreated(saleOrder),
       notifyLowStockForProducts(uniqueProductIds),
     ]);
+
+    // Trigger tạo hóa đơn + gửi email (non-blocking)
+    // Chỉ trigger ngay cho COD; Online sẽ được trigger từ confirmSalePayment sau khi capture
+    const guestPaymentMethod = normalizePaymentMethod(paymentMethod);
+    if (guestPaymentMethod !== 'Online') {
+      setImmediate(() => runPostPaymentInvoiceFlow(String(saleOrder._id)).catch(() => {}));
+    }
+
     return res.status(201).json(buildCheckoutSuccessResponse(saleOrder));
   } catch (error) {
     if (idempotencyKey && isDuplicateIdempotencyError(error)) {
@@ -1065,23 +1096,23 @@ exports.checkout = async (req, res) => {
 
     const saleOrder = await runSaleCheckoutTransaction({
       createOrderPayload: {
-      customerId,
-      paymentMethod,
-      totalAmount,
-      shippingFee: normalizedShippingFee,
-      shippingAddress: normalizedAddress,
-      shippingPhone: normalizedPhone,
-      guestName: normalizedName,
-      guestEmail: normalizedEmail,
-      guestVerificationMethod: null,
-      guestVerificationId: null,
-      note,
-      items: normalizedItems,
-      idempotencyKey,
-      voucherCode: voucherApplication.voucherCode,
-      voucherId: voucherApplication.voucher?._id || null,
-      voucherSnapshot: voucherApplication.voucherSnapshot,
-      discountAmount: voucherApplication.discountAmount,
+        customerId,
+        paymentMethod,
+        totalAmount,
+        shippingFee: normalizedShippingFee,
+        shippingAddress: normalizedAddress,
+        shippingPhone: normalizedPhone,
+        guestName: normalizedName,
+        guestEmail: normalizedEmail,
+        guestVerificationMethod: null,
+        guestVerificationId: null,
+        note,
+        items: normalizedItems,
+        idempotencyKey,
+        voucherCode: voucherApplication.voucherCode,
+        voucherId: voucherApplication.voucher?._id || null,
+        voucherSnapshot: voucherApplication.voucherSnapshot,
+        discountAmount: voucherApplication.discountAmount,
       },
       voucherId: voucherApplication.voucher?._id || null,
     });
@@ -1099,6 +1130,15 @@ exports.checkout = async (req, res) => {
       notifySaleOrderCreated(saleOrder),
       notifyLowStockForProducts(uniqueProductIds),
     ]);
+
+    // Trigger tạo hóa đơn + gửi email tự động (non-blocking)
+    // CHỈ trigger cho COD — Online sẽ được trigger trong confirmSalePayment sau khi capture thành công,
+    // tránh gửi email 2 lần cho cùng một đơn.
+    const checkoutPaymentMethod = normalizePaymentMethod(paymentMethod);
+    if (checkoutPaymentMethod !== 'Online') {
+      setImmediate(() => runPostPaymentInvoiceFlow(String(saleOrder._id)).catch(() => {}));
+    }
+
     return res.status(201).json(buildCheckoutSuccessResponse(saleOrder));
   } catch (error) {
     if (idempotencyKey && isDuplicateIdempotencyError(error)) {
@@ -1249,7 +1289,7 @@ exports.getMySaleOrders = async (req, res) => {
     const attachedOrders = await attachSaleOrderItems(orders);
     const ordersWithReviewState = await attachReviewStatesForCustomer(attachedOrders, customerId);
     // #region agent log
-    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H3',location:'BE/controllers/order.controller.js:getMySaleOrders',message:'Customer orders payload snapshot',data:{customerId:String(customerId||''),count:ordersWithReviewState.length,statuses:ordersWithReviewState.map((o)=>({id:String(o?._id||''),status:String(o?.status||''),userStatus:String(o?.userStatus||'')}))},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '23dab3' }, body: JSON.stringify({ sessionId: '23dab3', runId: 'order-status-sync', hypothesisId: 'H3', location: 'BE/controllers/order.controller.js:getMySaleOrders', message: 'Customer orders payload snapshot', data: { customerId: String(customerId || ''), count: ordersWithReviewState.length, statuses: ordersWithReviewState.map((o) => ({ id: String(o?._id || ''), status: String(o?.status || ''), userStatus: String(o?.userStatus || '') })) }, timestamp: Date.now() }) }).catch(() => { });
     // #endregion
 
     return res.json({
@@ -1473,7 +1513,7 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
 
     const order = await SaleOrder.findById(id);
     // #region agent log
-    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H1',location:'BE/controllers/order.controller.js:updateOwnerSaleOrderStatus:before',message:'Staff update status request',data:{orderId:String(id||''),requestedStatus:String(status||''),normalizedStatus:String(normalizedStatus||''),currentStatus:String(order?.status||''),currentUserStatus:String(order?.userStatus||''),actorRole:String(req?.user?.role||'')},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '23dab3' }, body: JSON.stringify({ sessionId: '23dab3', runId: 'order-status-sync', hypothesisId: 'H1', location: 'BE/controllers/order.controller.js:updateOwnerSaleOrderStatus:before', message: 'Staff update status request', data: { orderId: String(id || ''), requestedStatus: String(status || ''), normalizedStatus: String(normalizedStatus || ''), currentStatus: String(order?.status || ''), currentUserStatus: String(order?.userStatus || ''), actorRole: String(req?.user?.role || '') }, timestamp: Date.now() }) }).catch(() => { });
     // #endregion
     if (!order || order.orderType !== ORDER_TYPE.BUY) {
       return res.status(404).json({
@@ -1535,7 +1575,7 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
     }
     await order.save();
     // #region agent log
-    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H1',location:'BE/controllers/order.controller.js:updateOwnerSaleOrderStatus:afterSave',message:'Staff update status persisted',data:{orderId:String(order?._id||''),savedStatus:String(order?.status||''),savedUserStatus:String(order?.userStatus||''),historyCount:Array.isArray(order?.history)?order.history.length:0,lastHistoryStatus:String(order?.history?.[order.history.length-1]?.status||''),lastHistoryAction:String(order?.history?.[order.history.length-1]?.action||'')},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '23dab3' }, body: JSON.stringify({ sessionId: '23dab3', runId: 'order-status-sync', hypothesisId: 'H1', location: 'BE/controllers/order.controller.js:updateOwnerSaleOrderStatus:afterSave', message: 'Staff update status persisted', data: { orderId: String(order?._id || ''), savedStatus: String(order?.status || ''), savedUserStatus: String(order?.userStatus || ''), historyCount: Array.isArray(order?.history) ? order.history.length : 0, lastHistoryStatus: String(order?.history?.[order.history.length - 1]?.status || ''), lastHistoryAction: String(order?.history?.[order.history.length - 1]?.action || '') }, timestamp: Date.now() }) }).catch(() => { });
     // #endregion
     if (normalizedStatus === 'Cancelled') {
       await notifySaleOrderCancelled(order, 'owner_or_staff_cancel');

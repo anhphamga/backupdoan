@@ -662,7 +662,8 @@ export default function ProductDetailPage() {
         rentPrice: currentRentPrice,
         productInstanceId: null,
         rentStartDate: startDateTime,
-        rentEndDate: endDateTime
+        rentEndDate: endDateTime,
+        image: currentImagesByColor[selectedImageIndex] || currentImagesByColor[0] || product.imageUrl || '',
       });
       showToast(t.toastRent);
       // Đóng modal và chuyển đến trang checkout
@@ -698,7 +699,8 @@ export default function ProductDetailPage() {
         productInstanceId: selectedConditionOption?.instanceId || null,
         conditionLevel: selectedConditionOption?.level || 'New',
         conditionScore: Number(selectedConditionOption?.score ?? 100),
-        quantity: 1
+        quantity: 1,
+        image: currentImagesByColor[selectedImageIndex] || currentImagesByColor[0] || product.imageUrl || '',
       });
       showToast(t.toastBuy);
       navigate("/cart");

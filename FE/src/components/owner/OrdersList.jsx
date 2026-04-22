@@ -201,9 +201,8 @@ function TypeTab({ active, icon, label, description, onClick }) {
         <button
             type="button"
             onClick={onClick}
-            className={`rounded-2xl border px-4 py-4 text-left transition ${
-                active ? 'border-[#1975d2] bg-[#1975d2]/8 shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'
-            }`}
+            className={`rounded-2xl border px-4 py-4 text-left transition ${active ? 'border-[#1975d2] bg-[#1975d2]/8 shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'
+                }`}
         >
             <div className="flex items-start gap-3">
                 <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${active ? 'bg-[#1975d2] text-white' : 'bg-slate-100 text-slate-600'}`}>
@@ -410,22 +409,22 @@ export default function OrdersList({ showRentOrders = true, allowSaleStatusUpdat
     return (
         <div className="space-y-6">
             {showRentOrders && !normalizedFixedOrderType ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-                <TypeTab
-                    active={orderType === ORDER_TYPES.sale}
-                    icon={ShoppingBag}
-                    label="Đơn mua"
-                    description="Quản lý đơn mua của khách vãng lai và khách đã đăng nhập."
-                    onClick={() => setOrderType(ORDER_TYPES.sale)}
-                />
-                <TypeTab
-                    active={orderType === ORDER_TYPES.rent}
-                    icon={Package}
-                    label="Đơn thuê"
-                    description="Theo dõi toàn bộ đơn thuê và trạng thái vận hành hiện tại."
-                    onClick={() => setOrderType(ORDER_TYPES.rent)}
-                />
-            </div>
+                <div className="grid gap-4 lg:grid-cols-2">
+                    <TypeTab
+                        active={orderType === ORDER_TYPES.sale}
+                        icon={ShoppingBag}
+                        label="Đơn mua"
+                        description="Quản lý đơn mua của khách vãng lai và khách đã đăng nhập."
+                        onClick={() => setOrderType(ORDER_TYPES.sale)}
+                    />
+                    <TypeTab
+                        active={orderType === ORDER_TYPES.rent}
+                        icon={Package}
+                        label="Đơn thuê"
+                        description="Theo dõi toàn bộ đơn thuê và trạng thái vận hành hiện tại."
+                        onClick={() => setOrderType(ORDER_TYPES.rent)}
+                    />
+                </div>
             ) : null}
 
             <div className="grid gap-4 md:grid-cols-4">

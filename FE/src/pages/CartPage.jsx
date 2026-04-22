@@ -7,7 +7,14 @@ import { useAuth } from '../hooks/useAuth'
 import { useRentalCart } from '../contexts/RentalCartContext'
 import { useBuyCart } from '../contexts/BuyCartContext'
 import { createGuestRentOrderApi, createRentOrderApi, payDepositApi } from '../services/rent-order.service'
-import { createDepositPaymentLinkApi, createGuestDepositPaymentLinkApi, createSalePaymentLinkApi } from '../services/payment.service'
+import {
+  createDepositPaymentLinkApi,
+  createGuestDepositPaymentLinkApi,
+  createSalePaymentLinkApi,
+  createPaypalDepositOrderApi,
+  createPaypalSaleOrderApi,
+  cancelPaypalOrderApi,
+} from '../services/payment.service'
 import { checkoutApi, guestCheckoutApi } from '../services/order.service'
 import { getMyVouchersApi, validateVoucherApi } from '../services/voucher.service'
 import { ADDRESS_DATA } from '../constants/addressData'
@@ -20,6 +27,7 @@ const ADDRESS_HISTORY_KEY = 'inhere_checkout_address_history'
 const PAYMENT_OPTIONS = [
   { value: 'COD', title: '🚚 Thanh toán khi nhận hàng', description: 'Phù hợp khi bạn muốn kiểm tra đơn trước khi thanh toán.' },
   { value: 'PayOS', title: '📱 Thanh toán bằng QR', description: 'Thanh toán ngay bằng mã QR hoặc chuyển khoản. Đơn được xác nhận tự động.' },
+  { value: 'PayPal', title: '🅿️ PayPal', description: 'Thanh toán qua PayPal hỗ trợ thanh toán quốc tế' },
 ]
 
 const formatCurrency = (value) => `${Number(value || 0).toLocaleString('vi-VN')}đ`
@@ -126,7 +134,7 @@ function CheckoutSection({ icon: SectionIcon, title, subtitle, children }) {
 
 function EmptyState() {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#fdf2f8,_#f8fafc_55%)]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#fdf2f8,#f8fafc_55%)]">
       <Header />
       <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-3xl items-center justify-center px-4 py-12">
         <div className="w-full rounded-[28px] border border-white/70 bg-white/90 p-10 text-center shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -145,7 +153,7 @@ function EmptyState() {
 
 function CheckoutResultState({ message, rentalOrderId }) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#ecfdf5,_#f8fafc_55%)]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#ecfdf5,#f8fafc_55%)]">
       <Header />
       <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-3xl items-center justify-center px-4 py-12">
         <div className="w-full rounded-[28px] border border-emerald-100 bg-white/95 p-10 text-center shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -263,9 +271,9 @@ export default function CartPage() {
     name: '',
     phone: '',
     email: '',
-    province: 'Quảng Nam',
-    district: 'Thành phố Hội An',
-    ward: 'Cẩm Phô',
+    province: 'Tỉnh/Thành phố',
+    district: 'Huyện/Quận',
+    ward: ' Phường/Xã',
     detailedAddress: '',
     paymentMethod: 'COD',
     note: ''
@@ -292,6 +300,12 @@ export default function CartPage() {
       setPendingGuestCheckout(null)
     }
   }, [isAuthenticated])
+
+  useEffect(() => {
+    if (!isAuthenticated && rentalItems.length > 0 && rentalPaymentMethod === 'Cash') {
+      setRentalPaymentMethod('PayOS')
+    }
+  }, [isAuthenticated, rentalItems.length, rentalPaymentMethod])
 
   useEffect(() => {
     const fetchSuggestedVouchers = async () => {
@@ -427,8 +441,7 @@ export default function CartPage() {
   )
 
   const getBuyFieldClassName = (field) =>
-    `w-full rounded-2xl border bg-white px-4 py-3 outline-none transition ${
-      buyFieldErrors[field] ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-rose-300'
+    `w-full rounded-2xl border bg-white px-4 py-3 outline-none transition ${buyFieldErrors[field] ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-rose-300'
     }`
   const eligibleVoucherSuggestions = useMemo(() => {
     const availableOrderTypes = new Set()
@@ -583,19 +596,19 @@ export default function CartPage() {
       const validations = await Promise.all([
         buyItems.length > 0
           ? validateVoucherApi({
-              code,
-              cartItems: buildBuyVoucherCartItems(),
-              subtotal: buySubtotal,
-              orderType: 'sale'
-            })
+            code,
+            cartItems: buildBuyVoucherCartItems(),
+            subtotal: buySubtotal,
+            orderType: 'sale'
+          })
           : Promise.resolve(null),
         rentalItems.length > 0
           ? validateVoucherApi({
-              code,
-              cartItems: buildRentalVoucherCartItems(),
-              subtotal: rentalTotalAmount,
-              orderType: 'rental'
-            })
+            code,
+            cartItems: buildRentalVoucherCartItems(),
+            subtotal: rentalTotalAmount,
+            orderType: 'rental'
+          })
           : Promise.resolve(null)
       ])
 
@@ -651,25 +664,25 @@ export default function CartPage() {
   const buildBuyPayload = (session = guestVerificationSession) => {
     const sanitizedForm = sanitizeCheckoutForm(buyForm)
     return ({
-    ...(isAuthenticated ? {} : { verificationToken: session?.verificationToken }),
-    name: sanitizedForm.name,
-    phone: sanitizedForm.phone,
-    email: sanitizedForm.email,
-    address: buildShippingAddress(sanitizedForm),
-    paymentMethod: sanitizedForm.paymentMethod,
-    note: sanitizedForm.note,
-    shippingFee: buyShippingFee,
-    voucherCode: buyVoucherResult?.code || normalizeVoucherCode(buyVoucherCode),
-    items: buyItems.map((item) => ({
-      productId: item.productId,
-      productInstanceId: item.productInstanceId || undefined,
-      quantity: item.quantity,
-      size: item.size,
-      color: item.color,
-      salePrice: item.salePrice,
-      conditionLevel: item.conditionLevel || 'New'
-    }))
-  })
+      ...(isAuthenticated ? {} : { verificationToken: session?.verificationToken }),
+      name: sanitizedForm.name,
+      phone: sanitizedForm.phone,
+      email: sanitizedForm.email,
+      address: buildShippingAddress(sanitizedForm),
+      paymentMethod: sanitizedForm.paymentMethod,
+      note: sanitizedForm.note,
+      shippingFee: buyShippingFee,
+      voucherCode: buyVoucherResult?.code || normalizeVoucherCode(buyVoucherCode),
+      items: buyItems.map((item) => ({
+        productId: item.productId,
+        productInstanceId: item.productInstanceId || undefined,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+        salePrice: item.salePrice,
+        conditionLevel: item.conditionLevel || 'New'
+      }))
+    })
   }
 
   const buildRentPayload = (idempotencyKey) => {
@@ -679,27 +692,28 @@ export default function CartPage() {
     const orderEndDate = validDates.reduce((max, item) =>
       !max || item.rentEndDate > max ? item.rentEndDate : max, null)
     return ({
-    rentStartDate: orderStartDate,
-    rentEndDate: orderEndDate,
-    items: rentalItems.map((item) => {
-      const days = calculateDays(item.rentStartDate, item.rentEndDate)
-      return {
-        productInstanceId: item.productInstanceId,
-        productId: item.productId,
-        baseRentPrice: item.rentPrice,
-        finalPrice: item.rentPrice * days,
-        size: item.size,
-        color: item.color,
-        rentStartDate: item.rentStartDate,
-        rentEndDate: item.rentEndDate
-      }
-    }),
-    voucherCode: rentalVoucherResult?.code || normalizeVoucherCode(rentalVoucherCode),
-    depositAmount: rentalDepositAmount,
-    remainingAmount: rentalRemainingAmount,
-    totalAmount: rentalSubtotalAfterVoucher,
-    idempotencyKey
-  })}
+      rentStartDate: orderStartDate,
+      rentEndDate: orderEndDate,
+      items: rentalItems.map((item) => {
+        const days = calculateDays(item.rentStartDate, item.rentEndDate)
+        return {
+          productInstanceId: item.productInstanceId,
+          productId: item.productId,
+          baseRentPrice: item.rentPrice,
+          finalPrice: item.rentPrice * days,
+          size: item.size,
+          color: item.color,
+          rentStartDate: item.rentStartDate,
+          rentEndDate: item.rentEndDate
+        }
+      }),
+      voucherCode: rentalVoucherResult?.code || normalizeVoucherCode(rentalVoucherCode),
+      depositAmount: rentalDepositAmount,
+      remainingAmount: rentalRemainingAmount,
+      totalAmount: rentalSubtotalAfterVoucher,
+      idempotencyKey
+    })
+  }
 
   // Validate form contact khi guest thuê (rental-only). Trả về { errors, sanitized } giống buyForm.
   const validateRentGuestForm = (form) => {
@@ -818,17 +832,28 @@ export default function CartPage() {
         }
         createdRentalOrderId = rentalResponse.data?._id || null
         if (createdRentalOrderId) {
-          if (isAuthenticated && rentalPaymentMethod !== 'PayOS') {
+          const isOnlineRentalPayment = ['PayOS', 'PayPal'].includes(rentalPaymentMethod)
+          if (isAuthenticated && !isOnlineRentalPayment) {
             await payDepositApi(createdRentalOrderId, { method: rentalPaymentMethod })
             clearRentalCart()
           } else {
-            // Guest luôn đi PayOS; member chọn PayOS cũng đi nhánh này
+            // Guest/customer chọn thanh toán online sẽ đi qua cổng đã chọn
             clearRentalCart()
-            const linkData = isAuthenticated
-              ? await createDepositPaymentLinkApi(createdRentalOrderId)
-              : await createGuestDepositPaymentLinkApi(createdRentalOrderId, guestRentEmail)
-            window.location.href = linkData.data.paymentUrl
-            return
+            try {
+              const linkData = rentalPaymentMethod === 'PayPal'
+                ? await createPaypalDepositOrderApi(createdRentalOrderId)
+                : isAuthenticated
+                  ? await createDepositPaymentLinkApi(createdRentalOrderId, 'payos')
+                  : await createGuestDepositPaymentLinkApi(createdRentalOrderId, guestRentEmail, 'payos')
+              window.location.href = linkData.data.paymentUrl
+              return
+            } catch (linkErr) {
+              // Tạo link thanh toán cọc thất bại → rollback đơn thuê
+              if (rentalPaymentMethod === 'PayPal' && createdRentalOrderId) {
+                try { await cancelPaypalOrderApi({ purpose: 'deposit', orderId: createdRentalOrderId }) } catch { /* ignore */ }
+              }
+              throw linkErr
+            }
           }
         }
       }
@@ -838,14 +863,26 @@ export default function CartPage() {
         const buyPayload = { ...buildBuyPayload(session), idempotencyKey: createIdempotencyKey('sale-checkout') }
         const response = !isAuthenticated ? await guestCheckoutApi(buyPayload) : await checkoutApi(buyPayload)
         saleOrderId = response.data?.orderId || null
-        clearBuyCart()
 
-        // Nếu chọn PayOS cho đơn mua → tạo link và redirect (cả guest lẫn member)
-        if (buyForm.paymentMethod === 'PayOS' && saleOrderId) {
-          const linkData = await createSalePaymentLinkApi(saleOrderId)
-          window.location.href = linkData.data.paymentUrl
-          return
+        // Nếu chọn thanh toán online cho đơn mua → tạo link và redirect (cả guest lẫn member)
+        if (['PayOS', 'PayPal'].includes(buyForm.paymentMethod) && saleOrderId) {
+          try {
+            const linkData = buyForm.paymentMethod === 'PayPal'
+              ? await createPaypalSaleOrderApi(saleOrderId)
+              : await createSalePaymentLinkApi(saleOrderId, 'payos')
+            window.location.href = linkData.data.paymentUrl
+            return
+          } catch (linkErr) {
+            // Tạo link thanh toán thất bại → rollback đơn hàng để tránh kẹt PendingPayment
+            if (buyForm.paymentMethod === 'PayPal' && saleOrderId) {
+              try { await cancelPaypalOrderApi({ purpose: 'sale', saleOrderId }) } catch { /* ignore */ }
+            }
+            // Re-throw để catch bên ngoài hiển thị lỗi cho user
+            throw linkErr
+          }
         }
+
+        clearBuyCart()
         if (!isAuthenticated) setGuestVerificationSession(null)
         saveAddressHistory({
           province: sanitizedBuyForm.province,
@@ -865,7 +902,8 @@ export default function CartPage() {
       setBuySuccess(successMessage)
       setCheckoutResult({ message: successMessage, rentalOrderId: createdRentalOrderId })
     } catch (err) {
-      const msg = err.response?.data?.message || 'Không thể xử lý checkout. Vui lòng thử lại.'
+      const detail = err.response?.data?.detail ? ` (${err.response.data.detail})` : ''
+      const msg = (err.response?.data?.message || 'Không thể xử lý checkout. Vui lòng thử lại.') + detail
       if (createdRentalOrderId) {
         clearRentalCart()
         setRentalError('')
@@ -1006,11 +1044,10 @@ export default function CartPage() {
                                 type="button"
                                 onClick={() => handleSelectSuggestedVoucher(voucher)}
                                 disabled={orderVoucherLoading}
-                                className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
-                                  isSelected
+                                className={`w-full rounded-2xl border px-4 py-3 text-left transition ${isSelected
                                     ? 'border-amber-300 bg-white shadow-sm'
                                     : 'border-amber-100 bg-white/80 hover:border-amber-200 hover:bg-white'
-                                }`}
+                                  }`}
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
@@ -1126,16 +1163,27 @@ export default function CartPage() {
                         type="radio"
                         name="rentalPaymentMethod"
                         value="PayOS"
-                        checked={rentalPaymentMethod === 'PayOS' || (!isAuthenticated && buyItems.length === 0)}
+                        checked={rentalPaymentMethod === 'PayOS'}
                         onChange={(e) => setRentalPaymentMethod(e.target.value)}
                       />
                       <span className="text-slate-700">📱 Thanh toán bằng QR</span>
                       <span className="ml-auto rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-600">Nhanh hơn</span>
                     </label>
+                    <label className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm cursor-pointer transition ${rentalPaymentMethod === 'PayPal' ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
+                      <input
+                        type="radio"
+                        name="rentalPaymentMethod"
+                        value="PayPal"
+                        checked={rentalPaymentMethod === 'PayPal'}
+                        onChange={(e) => setRentalPaymentMethod(e.target.value)}
+                      />
+                      <span className="text-slate-700">🅿️ PayPal </span>
+                      <span className="ml-auto rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-600">Mới</span>
+                    </label>
                   </div>
-                  {(rentalPaymentMethod === 'PayOS' || (!isAuthenticated && buyItems.length === 0)) && (
+                  {['PayOS', 'PayPal'].includes(rentalPaymentMethod) && (
                     <p className="mt-2 text-xs text-indigo-600 bg-indigo-50 rounded-xl px-3 py-2">
-                      Bạn sẽ được chuyển đến trang thanh toán QR để quét mã hoặc chuyển khoản. Đơn thuê sẽ được xác nhận ngay sau khi thanh toán.
+                      Bạn sẽ được chuyển đến cổng thanh toán online đã chọn. Đơn thuê sẽ được xác nhận ngay sau khi thanh toán thành công.
                     </p>
                   )}
 

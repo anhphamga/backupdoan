@@ -1,6 +1,6 @@
 ﻿import { z } from "zod";
 
-export const CHECKOUT_PAYMENT_METHODS = ["COD", "PayOS"];
+export const CHECKOUT_PAYMENT_METHODS = ["COD", "PayOS", "PayPal"];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const PHONE_REGEX_VN_STRICT = /^(?:0\d{9}|\+84\d{9})$/;

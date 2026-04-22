@@ -41,7 +41,7 @@ export const BuyCartProvider = ({ children }) => {
       productId: product._id,
       productInstanceId: variant.productInstanceId || null,
       name: product.name,
-      image: product.images?.[0] || product.imageUrl || '',
+      image: variant.image || product.images?.[0] || product.imageUrl || '',
       color: variant.color || 'Default',
       size: normalizedSize,
       hasSizes,

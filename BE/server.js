@@ -30,6 +30,8 @@ app.get('/', (req, res) => {
 const routes = require('./routes');
 app.use('/api', routes);  // Tất cả API sẽ có prefix /api
 
+// Serve file tĩnh cho hóa đơn PDF (uploads/invoices)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
 // Error handling middleware

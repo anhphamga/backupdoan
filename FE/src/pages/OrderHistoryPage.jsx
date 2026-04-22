@@ -206,7 +206,7 @@ function calculateRentalDays(startDate, endDate) {
 
 function mapBuyStatus(status) {
   // #region agent log
-  fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H2',location:'FE/src/pages/OrderHistoryPage.jsx:mapBuyStatus',message:'Map buy raw status to UI status',data:{rawStatus:String(status||'')},timestamp:Date.now()})}).catch(()=>{});
+  fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '23dab3' }, body: JSON.stringify({ sessionId: '23dab3', runId: 'order-status-sync', hypothesisId: 'H2', location: 'FE/src/pages/OrderHistoryPage.jsx:mapBuyStatus', message: 'Map buy raw status to UI status', data: { rawStatus: String(status || '') }, timestamp: Date.now() }) }).catch(() => { });
   // #endregion
   switch (status) {
     case 'Completed':
@@ -434,11 +434,10 @@ function OrderFilters({
                 key={tab.value}
                 type="button"
                 onClick={() => onTabChange(tab.value)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  isActive
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${isActive
                     ? 'bg-slate-900 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -552,22 +551,20 @@ function RentalProgress({ currentStep }) {
           return (
             <div key={step.key} className="relative">
               <div
-                className={`flex h-full flex-col items-center rounded-2xl px-2 py-3 text-center transition ${
-                  isCurrent
+                className={`flex h-full flex-col items-center rounded-2xl px-2 py-3 text-center transition ${isCurrent
                     ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/10'
                     : isDone
                       ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
                       : 'bg-slate-50 text-slate-400 ring-1 ring-slate-200'
-                }`}
+                  }`}
               >
                 <div
-                  className={`mb-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
-                    isCurrent
+                  className={`mb-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${isCurrent
                       ? 'bg-white/15 text-white'
                       : isDone
                         ? 'bg-emerald-500 text-white'
                         : 'bg-white text-slate-400 ring-1 ring-slate-200'
-                  }`}
+                    }`}
                 >
                   {isDone ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
                 </div>
@@ -608,18 +605,18 @@ function OrderCard({ order, onAction }) {
   const typeMeta = TYPE_META[order.type]
   const financialRows = order.type === 'rent'
     ? [
-        { label: 'Tổng giá thuê', value: formatCurrency(order.totalAmount), icon: ShoppingBag },
-        { label: 'Đã cọc 50%', value: formatCurrency(order.depositAmount), icon: Wallet },
-        { label: 'Còn lại cần thanh toán', value: formatCurrency(order.remainingAmount), icon: CreditCard },
-        order.collateralAmount > 0
-          ? { label: 'Tiền thế chấp', value: formatCurrency(order.collateralAmount), icon: Box }
-          : null,
-      ].filter(Boolean)
+      { label: 'Tổng giá thuê', value: formatCurrency(order.totalAmount), icon: ShoppingBag },
+      { label: 'Đã cọc 50%', value: formatCurrency(order.depositAmount), icon: Wallet },
+      { label: 'Còn lại cần thanh toán', value: formatCurrency(order.remainingAmount), icon: CreditCard },
+      order.collateralAmount > 0
+        ? { label: 'Tiền thế chấp', value: formatCurrency(order.collateralAmount), icon: Box }
+        : null,
+    ].filter(Boolean)
     : [
-        { label: 'Tổng đơn', value: formatCurrency(order.subtotal), icon: ShoppingBag },
-        { label: 'Phí vận chuyển', value: formatCurrency(order.shippingFee), icon: Truck },
-        { label: 'Thanh toán', value: formatCurrency(order.totalAmount), icon: CreditCard },
-      ]
+      { label: 'Tổng đơn', value: formatCurrency(order.subtotal), icon: ShoppingBag },
+      { label: 'Phí vận chuyển', value: formatCurrency(order.shippingFee), icon: Truck },
+      { label: 'Thanh toán', value: formatCurrency(order.totalAmount), icon: CreditCard },
+    ]
 
   return (
     <article className="overflow-hidden rounded-[32px] border border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur">
@@ -787,7 +784,7 @@ export default function OrderHistoryPage() {
         getMyRentOrdersApi({ limit: 50 }),
       ])
       // #region agent log
-      fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H4',location:'FE/src/pages/OrderHistoryPage.jsx:fetchOrders',message:'Fetched orders before normalize',data:{buyCount:Array.isArray(buyResponse?.data)?buyResponse.data.length:0,buyStatuses:Array.isArray(buyResponse?.data)?buyResponse.data.map((o)=>({id:String(o?._id||''),status:String(o?.status||''),statusLabel:String(o?.statusLabel||''),userStatus:String(o?.userStatus||'')})):[]},timestamp:Date.now()})}).catch(()=>{});
+      fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '23dab3' }, body: JSON.stringify({ sessionId: '23dab3', runId: 'order-status-sync', hypothesisId: 'H4', location: 'FE/src/pages/OrderHistoryPage.jsx:fetchOrders', message: 'Fetched orders before normalize', data: { buyCount: Array.isArray(buyResponse?.data) ? buyResponse.data.length : 0, buyStatuses: Array.isArray(buyResponse?.data) ? buyResponse.data.map((o) => ({ id: String(o?._id || ''), status: String(o?.status || ''), statusLabel: String(o?.statusLabel || ''), userStatus: String(o?.userStatus || '') })) : [] }, timestamp: Date.now() }) }).catch(() => { });
       // #endregion
 
       const normalizedOrders = [
@@ -917,10 +914,10 @@ export default function OrderHistoryPage() {
 
             <Link
               to="/buy"
-              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
+              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white! no-underline visited:text-white! hover:bg-slate-800"
             >
               Khám phá bộ sưu tập
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4 text-white!" />
             </Link>
           </div>
         </section>
@@ -942,8 +939,8 @@ export default function OrderHistoryPage() {
           {!loading && !error && filteredOrders.length === 0 ? <EmptyState /> : null}
           {!loading && !error && filteredOrders.length > 0
             ? filteredOrders.map((order) => (
-                <OrderCard key={`${order.type}-${order.id}`} order={order} onAction={handleOrderAction} />
-              ))
+              <OrderCard key={`${order.type}-${order.id}`} order={order} onAction={handleOrderAction} />
+            ))
             : null}
         </section>
       </main>

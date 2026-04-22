@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { SlidersHorizontal, X } from "lucide-react";
 import Header from "../../components/common/Header";
@@ -265,6 +265,7 @@ export default function ShopPage() {
       size: "FREE SIZE",
       salePrice: Number(product?.baseSalePrice || 0),
       quantity: 1,
+      image: product?.images?.[0] || product?.imageUrl || '',
     });
     showToast("Đã thêm vào giỏ hàng.");
   };
