@@ -5,8 +5,10 @@ const RentOrder = require('../model/RentOrder.model');
 const RentOrderItem = require('../model/RentOrderItem.model');
 const SaleOrder = require('../model/SaleOrder.model');
 const SaleOrderItem = require('../model/SaleOrderItem.model');
+const User = require('../model/User.model');
 const GuestVerification = require('../model/GuestVerification.model');
 const Voucher = require('../model/Voucher.model');
+const bcrypt = require('bcryptjs');
 const { isValidEmail, isValidPhone, normalizeEmail, normalizePhone } = require('../utils/guestVerification');
 const { normalizeIdempotencyKey, isDuplicateIdempotencyError } = require('../utils/idempotency');
 const {
@@ -50,6 +52,39 @@ const normalizePaymentMethod = (value = '') => {
   if (value === 'BankTransfer') return 'BankTransfer';
   if (value === 'Online' || value === 'PayOS') return 'Online';
   return 'COD';
+};
+
+// Guest sale checkout doesn't create a user by default, but voucher per-user limits require a stable identity.
+// We reuse the same strategy as rent guest flow: create/find a "walk_in" customer by verified email.
+const findOrCreateGuestCustomer = async ({ email, name, phone }) => {
+  const normalizedEmail = normalizeEmail(email);
+  const existing = await User.findOne({ email: normalizedEmail });
+  if (existing) {
+    const updates = {};
+    if (name && String(existing.name || '').trim() !== String(name).trim()) {
+      updates.name = String(name).trim();
+    }
+    const normalizedPhone = normalizePhone(phone);
+    if (normalizedPhone && existing.phone !== normalizedPhone) {
+      updates.phone = normalizedPhone;
+    }
+    if (Object.keys(updates).length > 0) {
+      await User.updateOne({ _id: existing._id }, { $set: updates }).catch(() => null);
+    }
+    return existing;
+  }
+
+  const randomPassword = Math.random().toString(36).slice(2, 12);
+  const passwordHash = await bcrypt.hash(randomPassword, 10);
+  return User.create({
+    name: String(name || '').trim() || 'Khách vãng lai',
+    phone: normalizePhone(phone) || null,
+    email: normalizedEmail,
+    passwordHash,
+    role: 'customer',
+    segment: 'walk_in',
+    status: 'active',
+  });
 };
 
 const buildFallbackHistory = (order) => {
@@ -860,9 +895,15 @@ exports.guestCheckout = async (req, res) => {
     await ensureSaleStockAvailable(normalizedItems);
 
     const subtotal = normalizedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+
+    // If a voucher is used in guest flow, attach a stable guest user id so per-user limits can be enforced.
+    const normalizedVoucherCode = normalizeVoucherCode(voucherCode);
+    const guestUser = normalizedVoucherCode
+      ? await findOrCreateGuestCustomer({ email: verifiedEmail, name: normalizedName, phone: normalizedPhone })
+      : null;
     const voucherApplication = await applyVoucherForSaleOrder({
       voucherCode,
-      user: null,
+      user: guestUser ? { id: guestUser._id, role: 'customer' } : null,
       items,
       subtotal,
     });
@@ -875,7 +916,7 @@ exports.guestCheckout = async (req, res) => {
 
     const saleOrder = await runSaleCheckoutTransaction({
       createOrderPayload: {
-      customerId: null,
+      customerId: guestUser?._id || null,
       paymentMethod,
       totalAmount,
       shippingFee: normalizedShippingFee,

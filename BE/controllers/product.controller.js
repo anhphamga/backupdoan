@@ -602,14 +602,16 @@ const sanitizeProduct = (product, quantity = {}, lang = 'vi') => {
     likeCount: product.likeCount || 0,
     averageRating: Math.max(Number(product.averageRating || 0), 0),
     reviewCount: Math.max(Number(product.reviewCount || 0), 0),
+    // Quantity fields must reflect computed inventory (ProductInstance). Legacy `product.quantity/sizes`
+    // should not "inflate" stock when computed values exist (including 0).
     totalQuantity: Number.isFinite(Number(quantity.totalQuantity))
-      ? Math.max(Number(quantity.totalQuantity), resolvedQuantity)
+      ? Math.max(Number(quantity.totalQuantity), 0)
       : resolvedQuantity,
     availableQuantity: Number.isFinite(Number(quantity.availableQuantity))
-      ? Math.max(Number(quantity.availableQuantity), resolvedQuantity)
+      ? Math.max(Number(quantity.availableQuantity), 0)
       : resolvedQuantity,
     rentableQuantity: Number.isFinite(Number(quantity.rentableQuantity))
-      ? Math.max(Number(quantity.rentableQuantity), resolvedQuantity)
+      ? Math.max(Number(quantity.rentableQuantity), 0)
       : resolvedQuantity,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
@@ -798,9 +800,15 @@ const getProducts = async (req, res) => {
     }
     const allProducts = await Product.find(filter).sort({ createdAt: -1 }).lean();
     const quantityMap = await getQuantityMap(allProducts.map((product) => product._id));
-    const normalizedProducts = allProducts.map((product) =>
-      sanitizeProduct(product, quantityMap.get(String(product._id)), lang)
-    );
+    const normalizedProducts = allProducts.map((product) => {
+      // No fallback: if a product has no instances, treat stock as 0 on public listing.
+      const quantity = quantityMap.get(String(product._id)) || {
+        totalQuantity: 0,
+        availableQuantity: 0,
+        rentableQuantity: 0,
+      };
+      return sanitizeProduct(product, quantity, lang);
+    });
 
     const filteredProducts = normalizedProducts.filter((product) => {
       if (purpose === 'buy') {

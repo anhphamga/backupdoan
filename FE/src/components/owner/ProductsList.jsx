@@ -61,45 +61,40 @@ const getDisplaySizes = (product) => {
     if (fromStock.length > 0) {
         return [...new Set(fromStock)].join(', ')
     }
-
-    const fromSizes = toArray(product?.sizes)
-        .map((item) => toDisplayText(typeof item === 'object' ? item?.size : item))
-        .filter(Boolean)
-
-    if (fromSizes.length > 0) {
-        return [...new Set(fromSizes)].join(', ')
-    }
-
-    const fromOptions = toArray(product?.sizeOptions).map((item) => toDisplayText(item)).filter(Boolean)
-    if (fromOptions.length > 0) {
-        return [...new Set(fromOptions)].join(', ')
-    }
-
-    const singleSize = toDisplayText(product?.size)
-    return singleSize || 'Không có'
+    // No fallback: only show actual sizes derived from ProductInstance -> sizeStock.
+    return '—'
 }
 
 /** Tồn thực tế trong kho theo từng size (API owner: sizeStock), không tính đã bán */
 const renderOwnerSizeStock = (product) => {
     const rows = Array.isArray(product?.sizeStock) ? product.sizeStock : []
     if (rows.length > 0) {
+        const total = rows.reduce((sum, row) => sum + Number(row?.quantity || 0), 0)
+        const available = rows.reduce((sum, row) => sum + Number(row?.available || 0), 0)
+        const headline = total === 0
+            ? 'Hết hàng'
+            : (available === 0 ? 'Đang thuê hết' : null)
         return (
             <div className="flex flex-col gap-0.5 text-sm text-slate-800">
+                <div className="text-slate-700">
+                    {headline ? <span className="font-semibold">{headline} · </span> : null}
+                    <span className="text-slate-600">Tổng:</span> <span className="font-semibold">{total}</span>
+                    <span className="text-slate-400"> | </span>
+                    <span className="text-slate-600">Có sẵn:</span> <span className="font-semibold">{available}</span>
+                </div>
                 {rows.map((row) => (
                     <div key={`${row.size}-${row.quantity}`}>
                         <span className="font-semibold text-slate-800">{row.size}</span>
                         <span className="text-slate-500"> — </span>
-                        <span>{row.quantity}</span>
+                        <span>{Number(row.quantity || 0)}</span>
+                        <span className="text-slate-400"> (có sẵn {Number(row.available || 0)})</span>
                     </div>
                 ))}
             </div>
         )
     }
-    const t = Number(product?.totalQuantity ?? 0)
-    if (t > 0) {
-        return <span className="text-sm text-slate-600">Tổng (ước tính): {t}</span>
-    }
-    return <span className="text-sm text-slate-400">—</span>
+    // No fallback: show actual inventory only (derived from ProductInstance -> sizeStock).
+    return <span className="text-sm text-slate-600">Hết hàng · Tổng: 0 | Có sẵn: 0</span>
 }
 
 export default function ProductsList({ onSelectProduct, initialPage = 1 }) {
@@ -572,8 +567,11 @@ export default function ProductsList({ onSelectProduct, initialPage = 1 }) {
                             <tbody className="divide-y divide-slate-100">
                                 {paginatedProducts.map((product) => {
                                     const productId = product._id || product.id
-                                    const totalQuantity = Number(product.totalQuantity || 0)
-                                    const availableQuantity = Number(product.availableQuantity || 0)
+                                    // Status must be derived from actual inventory (ProductInstance -> sizeStock),
+                                    // not from computed/legacy quantity fields which can drift.
+                                    const sizeStockRows = Array.isArray(product?.sizeStock) ? product.sizeStock : []
+                                    const totalQuantity = sizeStockRows.reduce((sum, row) => sum + Number(row?.quantity || 0), 0)
+                                    const availableQuantity = sizeStockRows.reduce((sum, row) => sum + Number(row?.available || 0), 0)
                                     const productStatus =
                                         availableQuantity > 0
                                             ? 'Còn bản trống'

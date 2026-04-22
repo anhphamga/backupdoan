@@ -102,20 +102,15 @@ export const normalizeSizeStock = (product, toArray) => {
     }
   }
 
-  const fallbackStock = Number(product?.availableQuantity ?? product?.totalQuantity ?? product?.quantity ?? 0)
-  const fallbackSizes = toArray(product?.sizes)
-    .map((item) => toDisplayText(typeof item === 'object' ? item?.size : item))
-    .filter(Boolean)
-  const fallbackText = fallbackSizes.length > 0 ? [...new Set(fallbackSizes)].join(', ') : 'Không có'
-
   return {
-    rows: fallbackSizes.map((size) => ({ size, quantity: fallbackStock, available: fallbackStock, reserved: 0, renting: 0, other: 0 })),
-    totalStock: fallbackStock,
-    totalAvailable: fallbackStock,
+    // No fallback: inventory size/stock must come from ProductInstance-derived `sizeStock`.
+    rows: [],
+    totalStock: 0,
+    totalAvailable: 0,
     totalReserved: 0,
     totalRenting: 0,
-    sizeText: fallbackText,
-    sizeAvailableText: fallbackText,
+    sizeText: '—',
+    sizeAvailableText: '—',
   }
 }
 
