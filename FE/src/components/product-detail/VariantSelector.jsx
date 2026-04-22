@@ -14,13 +14,22 @@ export default function VariantSelector({
   return (
     <div className="space-y-4">
       {hasSizes ? (
-        <SizeSelector
-          sizes={sizes}
-          selectedSize={selectedSize}
-          onSelect={onSizeChange}
-          isDisabled={isSizeDisabled}
-          isFreeSize={isFreeSize}
-        />
+        <>
+          <SizeSelector
+            sizes={sizes}
+            selectedSize={selectedSize}
+            onSelect={onSizeChange}
+            isDisabled={isSizeDisabled}
+            isFreeSize={isFreeSize}
+          />
+          <button
+            type="button"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 mt-2"
+            onClick={() => window.dispatchEvent(new Event('open-size-guide'))}
+          >
+            Bảng tư vấn size
+          </button>
+        </>
       ) : (
         <div className="space-y-2">
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
