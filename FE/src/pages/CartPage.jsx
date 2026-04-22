@@ -533,6 +533,7 @@ export default function CartPage() {
   const buildBuyVoucherCartItems = () =>
     buyItems.map((item) => ({
       productId: item.productId,
+      productInstanceId: item.productInstanceId || undefined,
       quantity: item.quantity,
       size: item.size,
       color: item.color,
@@ -661,6 +662,7 @@ export default function CartPage() {
     voucherCode: buyVoucherResult?.code || normalizeVoucherCode(buyVoucherCode),
     items: buyItems.map((item) => ({
       productId: item.productId,
+      productInstanceId: item.productInstanceId || undefined,
       quantity: item.quantity,
       size: item.size,
       color: item.color,

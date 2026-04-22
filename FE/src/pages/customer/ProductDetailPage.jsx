@@ -349,11 +349,34 @@ export default function ProductDetailPage() {
     return imagesByColor[selectedColor] || baseImages;
   }, [imagesByColor, selectedColor, baseImages]);
 
-  const conditionOptions = useMemo(() => {
+  const filteredInstancesForSelection = useMemo(() => {
     if (!Array.isArray(availableInstances) || availableInstances.length === 0) return [];
+
+    const bySize = availableInstances.filter((instance) => {
+      const instanceSize = String(instance?.size || "").trim().toUpperCase();
+      if (!hasSizes || isFreeSize) {
+        return isFreeSizeValue(instanceSize || "FREE SIZE");
+      }
+      if (!selectedSize) return false;
+      return instanceSize === String(selectedSize || "").trim().toUpperCase();
+    });
+
+    // If backend provides color per instance, keep UI consistent with selected color.
+    const byColor = bySize.filter((instance) => {
+      const instanceColor = String(instance?.color || "").trim();
+      if (!instanceColor) return true;
+      if (!selectedColor) return true;
+      return instanceColor === selectedColor;
+    });
+
+    return byColor;
+  }, [availableInstances, hasSizes, isFreeSize, selectedColor, selectedSize]);
+
+  const conditionOptions = useMemo(() => {
+    if (!filteredInstancesForSelection.length) return [];
     const grouped = new Map();
 
-    availableInstances.forEach((instance) => {
+    filteredInstancesForSelection.forEach((instance) => {
       const score = Number(instance?.conditionScore ?? 100);
       const level = String(instance?.conditionLevel || "Used");
       const rentPrice = Number(instance?.currentRentPrice ?? 0);
@@ -391,7 +414,7 @@ export default function ProductDetailPage() {
         ...item,
         label: formatConditionLabel(item.score),
       }));
-  }, [availableInstances]);
+  }, [filteredInstancesForSelection]);
 
   const selectedConditionOption = useMemo(() => {
     if (!conditionOptions.length) return null;
@@ -445,7 +468,8 @@ export default function ProductDetailPage() {
 
   const currentSalePrice = useMemo(() => {
     if (selectedConditionOption) {
-      return Number(selectedConditionOption.salePrice || 0);
+      const optionSalePrice = Number(selectedConditionOption.salePrice || 0);
+      if (optionSalePrice > 0) return optionSalePrice;
     }
     return Number(product?.baseSalePrice || 0);
   }, [selectedConditionOption, product?.baseSalePrice]);

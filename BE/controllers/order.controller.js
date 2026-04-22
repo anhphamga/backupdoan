@@ -146,6 +146,7 @@ const buildNormalizedSaleItems = (items = [], productMap = new Map()) => {
       note: String(item.note || '').trim(),
       unitPrice,
       conditionLevel: item.conditionLevel === 'Used' ? 'Used' : 'New',
+      productInstanceId: item?.productInstanceId || null,
     };
   });
 };
@@ -207,13 +208,15 @@ const getBlockedInstanceIdsForFutureRent = async (instanceIds = []) => {
 };
 
 const ensureSaleStockAvailable = async (normalizedItems = []) => {
-  // Group by productId + conditionLevel to check per-condition stock
+  // Group by productId + conditionLevel + size to check real stock buckets.
   const requestedByKey = {};
   for (const item of normalizedItems) {
     const conditionLevel = item.conditionLevel === 'Used' ? 'Used' : 'New';
-    const key = `${String(item.productId)}::${conditionLevel}`;
+    const normalizedSize = String(item?.size || '').trim().toUpperCase();
+    const size = normalizedSize || 'FREE SIZE';
+    const key = `${String(item.productId)}::${conditionLevel}::${size}`;
     if (!requestedByKey[key]) {
-      requestedByKey[key] = { productId: item.productId, conditionLevel, count: 0 };
+      requestedByKey[key] = { productId: item.productId, conditionLevel, size, count: 0 };
     }
     requestedByKey[key].count += Number(item.quantity || 0);
   }
@@ -226,13 +229,22 @@ const ensureSaleStockAvailable = async (normalizedItems = []) => {
     productId: { $in: requestedProductIds },
     lifecycleStatus: 'Available',
     conditionLevel: { $in: requestedConditionLevels },
-  }).select('_id productId conditionLevel').lean();
+  }).select('_id productId conditionLevel size').lean();
 
   const blockedInstanceIds = await getBlockedInstanceIdsForFutureRent(candidateInstances.map((i) => i._id).filter(Boolean));
   const unblockedCandidates = candidateInstances.filter((i) => !blockedInstanceIds.has(String(i._id)));
 
-  for (const { productId, conditionLevel, count } of grouped) {
-    const available = unblockedCandidates.filter((i) => String(i.productId) === String(productId) && i.conditionLevel === conditionLevel).length;
+  const matchesSize = (instance, size) => {
+    const instanceSize = String(instance?.size || '').trim().toUpperCase() || 'FREE SIZE';
+    return instanceSize === (size || 'FREE SIZE');
+  };
+
+  for (const { productId, conditionLevel, size, count } of grouped) {
+    const available = unblockedCandidates.filter((i) => (
+      String(i.productId) === String(productId)
+      && i.conditionLevel === conditionLevel
+      && matchesSize(i, size)
+    )).length;
     if (available < count) throw new Error('OUT_OF_STOCK');
   }
 };
@@ -255,14 +267,26 @@ const assignSaleInstances = async (normalizedItems = [], saleOrderId = null, ses
   for (const item of normalizedItems) {
     const qty = Number(item.quantity || 1);
     const conditionLevel = item.conditionLevel === 'Used' ? 'Used' : 'New';
+    const normalizedSize = String(item?.size || '').trim().toUpperCase();
+    const size = normalizedSize || 'FREE SIZE';
+    const requestedInstanceId = mongoose.isValidObjectId(item?.productInstanceId)
+      ? new mongoose.Types.ObjectId(item.productInstanceId)
+      : null;
     for (let i = 0; i < qty; i++) {
+      const query = {
+        productId: item.productId,
+        lifecycleStatus: 'Available',
+        conditionLevel,
+        size,
+        ...(blockedObjectIds.length ? { _id: { $nin: blockedObjectIds } } : {}),
+      };
+
+      if (requestedInstanceId && i === 0) {
+        query._id = requestedInstanceId;
+      }
+
       const instance = await ProductInstance.findOneAndUpdate(
-        {
-          productId: item.productId,
-          lifecycleStatus: 'Available',
-          conditionLevel,
-          ...(blockedObjectIds.length ? { _id: { $nin: blockedObjectIds } } : {}),
-        },
+        query,
         { lifecycleStatus: 'Sold', soldOrderId: saleOrderId || null },
         { new: true, sort: { conditionScore: -1 }, ...txOptions }
       );
@@ -442,19 +466,26 @@ const runSaleCheckoutTransaction = async ({
 
   const runWithoutTransaction = async () => {
     const saleOrder = await createSaleOrderWithItems(createOrderPayload);
-    await assignSaleInstances(normalizedItems, saleOrder._id);
+    try {
+      await assignSaleInstances(normalizedItems, saleOrder._id);
 
-    if (voucherId) {
-      await Voucher.findByIdAndUpdate(voucherId, {
-        $inc: { usedCount: 1 },
-      });
+      if (voucherId) {
+        await Voucher.findByIdAndUpdate(voucherId, {
+          $inc: { usedCount: 1 },
+        });
+      }
+
+      return saleOrder;
+    } catch (fallbackError) {
+      // Best-effort rollback when not using transactions.
+      await SaleOrderItem.deleteMany({ orderId: saleOrder._id });
+      await SaleOrder.findByIdAndDelete(saleOrder._id);
+      throw fallbackError;
     }
-
-    return saleOrder;
   };
 
   if (shouldForceSaleCheckoutWithoutTransaction() || saleMongoTransactionsUnsupported) {
-    throw new Error('TRANSACTION_REQUIRED: sale checkout requires MongoDB transactions for inventory consistency');
+    return runWithoutTransaction();
   }
 
   const session = await mongoose.startSession();
@@ -499,7 +530,7 @@ const runSaleCheckoutTransaction = async ({
           );
         }
       }
-      throw new Error(`TRANSACTION_REQUIRED: ${error.message}`);
+      return runWithoutTransaction();
     }
 
     throw error;
@@ -946,7 +977,7 @@ exports.checkout = async (req, res) => {
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Gio hang mua dang trong.' });
+      return res.status(400).json({ success: false, message: 'Giỏ hàng mua đang trống.' });
     }
 
     const normalizedName = String(name || '').trim();
@@ -955,15 +986,15 @@ exports.checkout = async (req, res) => {
     const normalizedAddress = String(address || '').trim();
 
     if (!normalizedName || !normalizedAddress || !normalizedEmail) {
-      return res.status(400).json({ success: false, message: 'Vui long nhap day du ten, email va dia chi nhan hang.' });
+      return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ tên, email và địa chỉ nhận hàng.' });
     }
 
     if (!isValidPhone(normalizedPhone)) {
-      return res.status(400).json({ success: false, message: 'So dien thoai nhan hang khong hop le.' });
+      return res.status(400).json({ success: false, message: 'Số điện thoại nhận hàng không hợp lệ.' });
     }
 
     if (!isValidEmail(normalizedEmail)) {
-      return res.status(400).json({ success: false, message: 'Email nhan hang khong hop le.' });
+      return res.status(400).json({ success: false, message: 'Email nhận hàng không hợp lệ.' });
     }
 
     // CHANGED: use unique product ids to avoid false invalid-product errors for same product with different conditions.
@@ -972,7 +1003,7 @@ exports.checkout = async (req, res) => {
     const productMap = new Map(products.map((product) => [String(product._id), product]));
 
     if (productMap.size !== uniqueProductIds.length) {
-      return res.status(400).json({ success: false, message: 'Co san pham khong hop le hoac da ngung ban.' });
+      return res.status(400).json({ success: false, message: 'Có sản phẩm không hợp lệ hoặc đã ngừng bán.' });
     }
 
     const normalizedItems = buildNormalizedSaleItems(items, productMap);
@@ -1044,10 +1075,10 @@ exports.checkout = async (req, res) => {
 
     console.error('Checkout error:', error);
     const message = error.message === 'INVALID_PRODUCT_DATA'
-      ? 'Khong the xac thuc du lieu san pham trong gio hang.'
+      ? 'Không thể xác thực dữ liệu sản phẩm trong giỏ hàng.'
       : error.message === 'OUT_OF_STOCK'
         ? 'Có sản phẩm đã hết hàng hoặc không đủ số lượng để mua.'
-        : 'Khong the tao don mua luc nay.';
+        : 'Không thể tạo đơn mua lúc này.';
 
     const statusCode = (error.message === 'INVALID_PRODUCT_DATA' || error.message === 'OUT_OF_STOCK') ? 400 : 500;
 
@@ -1143,7 +1174,7 @@ exports.getOwnerSaleOrders = async (req, res) => {
     console.error('Get owner sale orders error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Khong the lay danh sach don mua luc nay.',
+      message: 'Không thể lấy danh sách đơn mua lúc này.',
     });
   }
 };
@@ -1176,6 +1207,9 @@ exports.getMySaleOrders = async (req, res) => {
 
     const attachedOrders = await attachSaleOrderItems(orders);
     const ordersWithReviewState = await attachReviewStatesForCustomer(attachedOrders, customerId);
+    // #region agent log
+    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H3',location:'BE/controllers/order.controller.js:getMySaleOrders',message:'Customer orders payload snapshot',data:{customerId:String(customerId||''),count:ordersWithReviewState.length,statuses:ordersWithReviewState.map((o)=>({id:String(o?._id||''),status:String(o?.status||''),userStatus:String(o?.userStatus||'')}))},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
 
     return res.json({
       success: true,
@@ -1185,7 +1219,7 @@ exports.getMySaleOrders = async (req, res) => {
     console.error('Get my sale orders error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Khong the lay lich su don mua luc nay.',
+      message: 'Không thể lấy lịch sử đơn mua lúc này.',
     });
   }
 };
@@ -1214,7 +1248,7 @@ exports.getMySaleOrderById = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Khong tim thay don mua.',
+        message: 'Không tìm thấy đơn mua.',
       });
     }
 
@@ -1229,7 +1263,7 @@ exports.getMySaleOrderById = async (req, res) => {
     console.error('Get my sale order detail error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Khong the lay chi tiet don mua luc nay.',
+      message: 'Không thể lấy chi tiết đơn mua lúc này.',
     });
   }
 };
@@ -1242,7 +1276,7 @@ exports.getGuestSaleOrderById = async (req, res) => {
     if (!guestOrderViewToken) {
       return res.status(401).json({
         success: false,
-        message: 'Thieu token xem don hang guest.',
+        message: 'Thiếu token xem đơn hàng guest.',
       });
     }
 
@@ -1252,14 +1286,14 @@ exports.getGuestSaleOrderById = async (req, res) => {
     } catch {
       return res.status(401).json({
         success: false,
-        message: 'Token xem don hang khong hop le hoac da het han.',
+        message: 'Token xem đơn hàng không hợp lệ hoặc đã hết hạn.',
       });
     }
 
     if (String(payload?.orderId || '') !== String(id || '')) {
       return res.status(403).json({
         success: false,
-        message: 'Token khong khop voi don hang.',
+        message: 'Token không khớp với đơn hàng.',
       });
     }
 
@@ -1274,14 +1308,14 @@ exports.getGuestSaleOrderById = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Khong tim thay don mua guest.',
+        message: 'Không tìm thấy đơn mua guest.',
       });
     }
 
     if (payload?.guestVerificationId && String(order?.guestVerificationId || '') !== String(payload.guestVerificationId)) {
       return res.status(403).json({
         success: false,
-        message: 'Token khong hop le cho don hang nay.',
+        message: 'Token không hợp lệ cho đơn hàng này.',
       });
     }
 
@@ -1290,7 +1324,7 @@ exports.getGuestSaleOrderById = async (req, res) => {
     if (payloadEmail && orderEmail && payloadEmail !== orderEmail) {
       return res.status(403).json({
         success: false,
-        message: 'Token khong hop le cho don hang nay.',
+        message: 'Token không hợp lệ cho đơn hàng này.',
       });
     }
 
@@ -1304,7 +1338,7 @@ exports.getGuestSaleOrderById = async (req, res) => {
     console.error('Get guest sale order detail error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Khong the lay chi tiet don mua guest luc nay.',
+      message: 'Không thể lấy chi tiết đơn mua guest lúc này.',
     });
   }
 };
@@ -1330,21 +1364,21 @@ exports.cancelMySaleOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Khong tim thay don mua.',
+        message: 'Không tìm thấy đơn mua.',
       });
     }
 
     if (order.status === 'Cancelled') {
       return res.status(400).json({
         success: false,
-        message: 'Don hang da o trang thai nay.',
+        message: 'Đơn hàng đã ở trạng thái này.',
       });
     }
 
     if (!['PendingPayment', 'PendingConfirmation'].includes(String(order.status || ''))) {
       return res.status(400).json({
         success: false,
-        message: `Khong the huy don o trang thai "${order.status}".`,
+        message: `Không thể hủy đơn ở trạng thái "${order.status}".`,
       });
     }
 
@@ -1356,7 +1390,7 @@ exports.cancelMySaleOrder = async (req, res) => {
     order.history.push({
       status: 'Cancelled',
       action: 'customer_cancel',
-      description: 'Khach hang da huy don',
+      description: 'Khách hàng đã hủy đơn',
       updatedBy: customerId,
       updatedAt: new Date(),
     });
@@ -1371,14 +1405,14 @@ exports.cancelMySaleOrder = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Huy don thanh cong.',
+      message: 'Hủy đơn thành công.',
       data: mapSaleOrderForOwner(populated, { customerFacing: true }),
     });
   } catch (error) {
     console.error('Cancel my sale order error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Khong the huy don mua luc nay.',
+      message: 'Không thể hủy đơn mua lúc này.',
     });
   }
 };
@@ -1392,22 +1426,25 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
     if (!SALE_ORDER_ALLOWED_STATUSES.has(normalizedStatus)) {
       return res.status(400).json({
         success: false,
-        message: 'Trang thai don mua khong hop le.',
+        message: 'Trạng thái đơn mua không hợp lệ.',
       });
     }
 
     const order = await SaleOrder.findById(id);
+    // #region agent log
+    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H1',location:'BE/controllers/order.controller.js:updateOwnerSaleOrderStatus:before',message:'Staff update status request',data:{orderId:String(id||''),requestedStatus:String(status||''),normalizedStatus:String(normalizedStatus||''),currentStatus:String(order?.status||''),currentUserStatus:String(order?.userStatus||''),actorRole:String(req?.user?.role||'')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!order || order.orderType !== ORDER_TYPE.BUY) {
       return res.status(404).json({
         success: false,
-        message: 'Khong tim thay don mua.',
+        message: 'Không tìm thấy đơn mua.',
       });
     }
 
     if (order.status === normalizedStatus) {
       return res.status(400).json({
         success: false,
-        message: 'Don hang da o trang thai nay.',
+        message: 'Đơn hàng đã ở trạng thái này.',
       });
     }
 
@@ -1415,7 +1452,7 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
     if (!allowedNextStatuses.includes(normalizedStatus)) {
       return res.status(400).json({
         success: false,
-        message: `Khong the chuyen tu ${order.status} sang ${normalizedStatus}.`,
+        message: `Không thể chuyển từ ${order.status} sang ${normalizedStatus}.`,
         allowedNextStatuses,
       });
     }
@@ -1456,6 +1493,9 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
       });
     }
     await order.save();
+    // #region agent log
+    fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H1',location:'BE/controllers/order.controller.js:updateOwnerSaleOrderStatus:afterSave',message:'Staff update status persisted',data:{orderId:String(order?._id||''),savedStatus:String(order?.status||''),savedUserStatus:String(order?.userStatus||''),historyCount:Array.isArray(order?.history)?order.history.length:0,lastHistoryStatus:String(order?.history?.[order.history.length-1]?.status||''),lastHistoryAction:String(order?.history?.[order.history.length-1]?.action||'')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (normalizedStatus === 'Cancelled') {
       await notifySaleOrderCancelled(order, 'owner_or_staff_cancel');
     }
@@ -1468,14 +1508,14 @@ exports.updateOwnerSaleOrderStatus = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Cap nhat trang thai don mua thanh cong.',
+      message: 'Cập nhật trạng thái đơn mua thành công.',
       data: mapSaleOrderForOwner(populated),
     });
   } catch (error) {
     console.error('Update sale order status error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Khong the cap nhat trang thai don mua luc nay.',
+      message: 'Không thể cập nhật trạng thái đơn mua lúc này.',
     });
   }
 };

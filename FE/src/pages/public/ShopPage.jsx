@@ -41,6 +41,36 @@ const priceInRange = (price, range) => {
   return true;
 };
 
+const isFreeSizeLike = (value = "") => {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+  return normalized === "freesize" || normalized === "onesize" || normalized === "free";
+};
+
+const requiresVariantSelection = (product = {}) => {
+  if (product?.hasSizes === true) return true;
+
+  const rows = Array.isArray(product?.sizes) ? product.sizes : [];
+  const hasSizedRows = rows.some((row) => {
+    const sizeValue = typeof row === "object" ? row?.size : row;
+    const sizeText = String(sizeValue || "").trim();
+    return Boolean(sizeText) && !isFreeSizeLike(sizeText);
+  });
+  if (hasSizedRows) return true;
+
+  const options = Array.isArray(product?.sizeOptions) ? product.sizeOptions : [];
+  const hasSizedOptions = options.some((size) => {
+    const sizeText = String(size || "").trim();
+    return Boolean(sizeText) && !isFreeSizeLike(sizeText);
+  });
+  if (hasSizedOptions) return true;
+
+  return false;
+};
+
 export default function ShopPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -120,7 +150,9 @@ export default function ShopPage() {
         console.log("Products:", apiResponseData);
         const normalizedProducts = (Array.isArray(apiResponseData) ? apiResponseData : []).filter((product) => {
           const pricingMode = String(product?.pricingMode || "").trim().toLowerCase();
-          return !pricingMode || pricingMode === "sale" || pricingMode === "buy";
+          // Accept all supported pricing modes from backend. Excluding unknown mode
+          // made valid products disappear even when API returned data.
+          return !pricingMode || ["sale", "buy", "common", "per_variant"].includes(pricingMode);
         });
         setProducts(Array.isArray(normalizedProducts) ? normalizedProducts : []);
         setPagination(payload?.pagination || DEFAULT_PAGINATION);
@@ -221,6 +253,13 @@ export default function ShopPage() {
       showToast("Sản phẩm đang hết hàng.");
       return;
     }
+
+    if (requiresVariantSelection(product)) {
+      showToast("Vui lòng chọn size/tình trạng trong trang chi tiết trước khi thêm giỏ hàng.");
+      navigate(`/products/${product?._id || product?.id}`);
+      return;
+    }
+
     addItem(product, {
       color: "Mặc định",
       size: "FREE SIZE",

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { getRouteByRole, isDashboardRole } from '../../utils/auth'
-import axiosClient from '../../config/axios'
 import { loginSchema } from '../../validations/login.schema'
 import { mapZodErrors, toTrimmedText } from '../../utils/validation/validation.rules'
 import Header from '../../components/common/Header'
@@ -17,7 +16,7 @@ const normalizeIdentifierForPhone = (value = '') => normalizeIdentifierInput(val
 const LoginPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login } = useAuth()
+  const { login, loginWithGoogle } = useAuth()
   const redirectPath = location.state?.from?.pathname
 
   const [form, setForm] = useState({
@@ -92,13 +91,16 @@ const LoginPage = () => {
 
   const handleCredentialResponse = async (response) => {
     try {
-      const res = await axiosClient.post('/auth/google-login', {
-        credential: response.credential,
+      const data = await loginWithGoogle({
+        idToken: response.credential,
         portal: 'customer'
       })
-      console.log('Google login success', res.data)
+      const fallbackPath = getRouteByRole(data.user.role)
+      const enforceRoleDashboard = isDashboardRole(data.user.role)
+      const targetPath = enforceRoleDashboard ? fallbackPath : (redirectPath || fallbackPath)
+      navigate(targetPath, { replace: true })
     } catch (err) {
-      console.error('Google login failed', err)
+      setError(normalizeLoginError(err))
     }
   }
   useEffect(() => {

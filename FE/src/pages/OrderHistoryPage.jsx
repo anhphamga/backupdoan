@@ -19,8 +19,8 @@ import {
 import Header from '../components/common/Header'
 import { useAuth } from '../contexts/AuthContext'
 import { useBuyCart } from '../contexts/BuyCartContext'
-import { getMySaleOrdersApi } from '../services/order.service'
-import { getMyRentOrdersApi } from '../services/rent-order.service'
+import { cancelMySaleOrderApi, getMySaleOrdersApi } from '../services/order.service'
+import { cancelRentOrderApi, getMyRentOrdersApi } from '../services/rent-order.service'
 import { UI_IMAGE_FALLBACKS } from '../constants/ui'
 
 const ORDER_TYPE_TABS = [
@@ -205,6 +205,9 @@ function calculateRentalDays(startDate, endDate) {
 }
 
 function mapBuyStatus(status) {
+  // #region agent log
+  fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H2',location:'FE/src/pages/OrderHistoryPage.jsx:mapBuyStatus',message:'Map buy raw status to UI status',data:{rawStatus:String(status||'')},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   switch (status) {
     case 'Completed':
       return 'completed'
@@ -783,6 +786,9 @@ export default function OrderHistoryPage() {
         getMySaleOrdersApi(),
         getMyRentOrdersApi({ limit: 50 }),
       ])
+      // #region agent log
+      fetch('http://127.0.0.1:7425/ingest/cae20d9c-252c-4f1d-b775-43cdb8f5040c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'23dab3'},body:JSON.stringify({sessionId:'23dab3',runId:'order-status-sync',hypothesisId:'H4',location:'FE/src/pages/OrderHistoryPage.jsx:fetchOrders',message:'Fetched orders before normalize',data:{buyCount:Array.isArray(buyResponse?.data)?buyResponse.data.length:0,buyStatuses:Array.isArray(buyResponse?.data)?buyResponse.data.map((o)=>({id:String(o?._id||''),status:String(o?.status||''),statusLabel:String(o?.statusLabel||''),userStatus:String(o?.userStatus||'')})):[]},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       const normalizedOrders = [
         ...normalizeBuyOrders(buyResponse?.data || []),
@@ -819,7 +825,26 @@ export default function OrderHistoryPage() {
     })
   }, [activeTab, orders, searchValue, statusFilter])
 
-  const handleOrderAction = (order, actionKey) => {
+  const handleOrderAction = async (order, actionKey) => {
+    if (actionKey === 'cancel') {
+      const confirmed = window.confirm('Bạn có chắc muốn hủy đơn này không?')
+      if (!confirmed) return
+      try {
+        if (order?.type === 'buy') {
+          await cancelMySaleOrderApi(order.id)
+        } else if (order?.type === 'rent') {
+          await cancelRentOrderApi(order.id)
+        }
+        await fetchOrders()
+        setActionMessage('Đã hủy đơn thành công')
+        setTimeout(() => setActionMessage(''), 1800)
+      } catch (actionError) {
+        const message = actionError?.response?.data?.message || 'Không thể hủy đơn lúc này.'
+        setError(message)
+      }
+      return
+    }
+
     if (actionKey !== 'reorder') return
     if (order?.type !== 'buy') return
 

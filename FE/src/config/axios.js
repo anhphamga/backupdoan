@@ -100,8 +100,8 @@ axiosClient.interceptors.response.use(
             console.log('🔐 [HTTP] Google OAuth response received:', {
                 status: response.status,
                 url: response.config.url,
-                hasAccessToken: Boolean(response.data?.accessToken),
-                hasUser: Boolean(response.data?.user),
+                hasAccessToken: Boolean(response.data?.data?.accessToken),
+                hasUser: Boolean(response.data?.data?.user),
                 timestamp: new Date().toISOString()
             })
         }

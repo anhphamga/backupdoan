@@ -52,19 +52,25 @@ export const BuyCartProvider = ({ children }) => {
     }
 
     setItems((prev) => {
-      const existingIndex = prev.findIndex(
-        (item) =>
+      const existingIndex = prev.findIndex((item) => {
+        if (newItem.productInstanceId || item.productInstanceId) {
+          return Boolean(newItem.productInstanceId) && item.productInstanceId === newItem.productInstanceId
+        }
+        return (
           item.productId === newItem.productId &&
           item.color === newItem.color &&
           item.size === newItem.size &&
           item.conditionLevel === newItem.conditionLevel
-      )
+        )
+      })
 
       if (existingIndex >= 0) {
         const nextItems = [...prev]
         nextItems[existingIndex] = {
           ...nextItems[existingIndex],
-          quantity: nextItems[existingIndex].quantity + quantity
+          quantity: newItem.productInstanceId
+            ? 1
+            : nextItems[existingIndex].quantity + quantity
         }
         saveCart(nextItems)
         return nextItems

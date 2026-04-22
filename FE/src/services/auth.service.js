@@ -46,9 +46,9 @@ export const googleLoginApi = async (payload) => {
     const response = await googleLoginRequest(payload)
     
     console.log('🔐 [API] Backend accepted Google token:', {
-      hasAccessToken: Boolean(response.data?.accessToken),
-      hasRefreshToken: Boolean(response.data?.refreshToken),
-      hasUser: Boolean(response.data?.user),
+      hasAccessToken: Boolean(response.data?.data?.accessToken),
+      hasRefreshToken: Boolean(response.data?.data?.refreshToken),
+      hasUser: Boolean(response.data?.data?.user),
       timestamp: new Date().toISOString()
     })
     

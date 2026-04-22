@@ -139,9 +139,9 @@ export const AuthProvider = ({ children }) => {
             const response = await googleLoginApi(payload)
             
             console.log('🔐 [OAuth] Google login successful:', {
-                userId: response.user?.id,
-                email: response.user?.email,
-                role: response.user?.role,
+                userId: response.data?.user?.id,
+                email: response.data?.user?.email,
+                role: response.data?.user?.role,
                 timestamp: new Date().toISOString()
             })
             
