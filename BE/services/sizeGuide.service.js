@@ -6,7 +6,6 @@ const {
   SIZE_GUIDE_GENDERS,
 } = require('../model/SizeGuide.model');
 
-const SIZE_ORDER = new Map(SIZE_GUIDE_SIZE_LABELS.map((label, index) => [label, index]));
 const RECOMMENDATION_INDEX_WEIGHTS = Object.freeze({
   height: 0.4,
   weight: 0.6,
@@ -49,7 +48,8 @@ const normalizeGender = (value) => {
 const normalizeSizeLabel = (value) => {
   const normalized = normalizeText(value).toUpperCase();
   if (!normalized) return '';
-  return SIZE_GUIDE_SIZE_LABELS.includes(normalized) ? normalized : '';
+  if (normalized.length > 20) return '';
+  return normalized;
 };
 
 const normalizeOptionalNumber = (value) => {
@@ -74,33 +74,136 @@ const normalizeMeasureNumber = (value) => {
   return num;
 };
 
-const sortRows = (rows = []) => (
-  rows.slice().sort((a, b) => {
-    const genderA = SIZE_GUIDE_GENDERS.indexOf(a.gender);
-    const genderB = SIZE_GUIDE_GENDERS.indexOf(b.gender);
+const normalizeDisplayOrder = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return Number.NaN;
+  return Math.floor(num);
+};
+
+const buildRecommendationSizeOrder = (rows = []) => {
+  const metricsBySize = new Map();
+
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const sizeLabel = normalizeSizeLabel(row?.sizeLabel);
+    if (!sizeLabel) return;
+
+    const displayOrder = normalizeDisplayOrder(row?.displayOrder);
+
+    const heightMin = Number(row?.heightMin);
+    const heightMax = Number(row?.heightMax);
+    const weightMin = Number(row?.weightMin);
+    const weightMax = Number(row?.weightMax);
+
+    const heightCenter = Number.isFinite(heightMin) && Number.isFinite(heightMax)
+      ? (heightMin + heightMax) / 2
+      : Number.NaN;
+    const weightCenter = Number.isFinite(weightMin) && Number.isFinite(weightMax)
+      ? (weightMin + weightMax) / 2
+      : Number.NaN;
+
+    const current = metricsBySize.get(sizeLabel) || {
+      orderTotal: 0,
+      orderCount: 0,
+      heightTotal: 0,
+      heightCount: 0,
+      weightTotal: 0,
+      weightCount: 0,
+    };
+
+    if (Number.isFinite(displayOrder)) {
+      current.orderTotal += displayOrder;
+      current.orderCount += 1;
+    }
+
+    if (Number.isFinite(heightCenter)) {
+      current.heightTotal += heightCenter;
+      current.heightCount += 1;
+    }
+
+    if (Number.isFinite(weightCenter)) {
+      current.weightTotal += weightCenter;
+      current.weightCount += 1;
+    }
+
+    metricsBySize.set(sizeLabel, current);
+  });
+
+  const labels = Array.from(metricsBySize.keys());
+  labels.sort((labelA, labelB) => {
+    const metricA = metricsBySize.get(labelA);
+    const metricB = metricsBySize.get(labelB);
+
+    const orderA = metricA.orderCount > 0 ? metricA.orderTotal / metricA.orderCount : Number.POSITIVE_INFINITY;
+    const orderB = metricB.orderCount > 0 ? metricB.orderTotal / metricB.orderCount : Number.POSITIVE_INFINITY;
+    if (orderA !== orderB) return orderA - orderB;
+
+    const heightA = metricA.heightCount > 0 ? metricA.heightTotal / metricA.heightCount : Number.POSITIVE_INFINITY;
+    const heightB = metricB.heightCount > 0 ? metricB.heightTotal / metricB.heightCount : Number.POSITIVE_INFINITY;
+    if (heightA !== heightB) return heightA - heightB;
+
+    const weightA = metricA.weightCount > 0 ? metricA.weightTotal / metricA.weightCount : Number.POSITIVE_INFINITY;
+    const weightB = metricB.weightCount > 0 ? metricB.weightTotal / metricB.weightCount : Number.POSITIVE_INFINITY;
+    if (weightA !== weightB) return weightA - weightB;
+
+    return labelA.localeCompare(labelB);
+  });
+
+  return new Map(labels.map((label, index) => [label, index]));
+};
+
+const sortRows = (rows = []) => {
+  const items = rows.map((row, index) => ({ row, index }));
+
+  items.sort((a, b) => {
+    const genderA = SIZE_GUIDE_GENDERS.indexOf(a.row.gender);
+    const genderB = SIZE_GUIDE_GENDERS.indexOf(b.row.gender);
     if (genderA !== genderB) return genderA - genderB;
 
-    const sizeA = SIZE_ORDER.get(a.sizeLabel);
-    const sizeB = SIZE_ORDER.get(b.sizeLabel);
-    return sizeA - sizeB;
-  })
-);
+    const orderA = normalizeDisplayOrder(a.row.displayOrder);
+    const orderB = normalizeDisplayOrder(b.row.displayOrder);
+    const hasOrderA = Number.isFinite(orderA);
+    const hasOrderB = Number.isFinite(orderB);
 
-const toClientRow = (row = {}) => ({
-  id: row._id,
-  sizeLabel: row.sizeLabel,
-  gender: row.gender,
-  heightMin: row.heightMin,
-  heightMax: row.heightMax,
-  weightMin: row.weightMin,
-  weightMax: row.weightMax,
-  itemLength: row.itemLength ?? null,
-  itemWidth: row.itemWidth ?? null,
-  type: row.type,
-  productId: row.productId || null,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});
+    if (hasOrderA && hasOrderB && orderA !== orderB) {
+      return orderA - orderB;
+    }
+
+    if (hasOrderA !== hasOrderB) {
+      return hasOrderA ? -1 : 1;
+    }
+
+    const labelA = normalizeSizeLabel(a.row.sizeLabel);
+    const labelB = normalizeSizeLabel(b.row.sizeLabel);
+    if (labelA !== labelB) {
+      return labelA.localeCompare(labelB);
+    }
+
+    return a.index - b.index;
+  });
+
+  return items.map((item) => item.row);
+};
+
+const toClientRow = (row = {}) => {
+  const displayOrder = normalizeDisplayOrder(row.displayOrder);
+
+  return {
+    id: row._id,
+    sizeLabel: row.sizeLabel,
+    gender: row.gender,
+    heightMin: row.heightMin,
+    heightMax: row.heightMax,
+    weightMin: row.weightMin,
+    weightMax: row.weightMax,
+    displayOrder: Number.isFinite(displayOrder) ? displayOrder : null,
+    itemLength: row.itemLength ?? null,
+    itemWidth: row.itemWidth ?? null,
+    type: row.type,
+    productId: row.productId || null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
 
 const normalizeRowsInput = (value) => {
   const source = parseJsonLike(value, []);
@@ -119,7 +222,8 @@ const validateAndNormalizeRows = (rowsInput = []) => {
   const seen = new Set();
   const normalizedRows = [];
 
-  for (const row of rows) {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
     if (!row || typeof row !== 'object') {
       return { error: 'each row must be an object', rows: [] };
     }
@@ -131,7 +235,7 @@ const validateAndNormalizeRows = (rowsInput = []) => {
       return { error: 'gender must be male or female', rows: [] };
     }
     if (!sizeLabel) {
-      return { error: 'sizeLabel must be one of S, M, L, XL', rows: [] };
+      return { error: 'sizeLabel is required and must be <= 20 characters', rows: [] };
     }
 
     const key = `${gender}::${sizeLabel}`;
@@ -171,29 +275,46 @@ const validateAndNormalizeRows = (rowsInput = []) => {
       heightMax,
       weightMin,
       weightMax,
+      displayOrder: normalizeDisplayOrder(row.displayOrder ?? row.display_order),
       itemLength,
       itemWidth,
+      __rowIndex: rowIndex,
     });
   }
 
-  const expectedKeys = [];
+  const reorderedRows = [];
   SIZE_GUIDE_GENDERS.forEach((gender) => {
-    SIZE_GUIDE_SIZE_LABELS.forEach((sizeLabel) => {
-      expectedKeys.push(`${gender}::${sizeLabel}`);
-    });
+    const genderRows = normalizedRows
+      .filter((row) => row.gender === gender)
+      .sort((a, b) => {
+        const orderA = normalizeDisplayOrder(a.displayOrder);
+        const orderB = normalizeDisplayOrder(b.displayOrder);
+        const hasOrderA = Number.isFinite(orderA);
+        const hasOrderB = Number.isFinite(orderB);
+
+        if (hasOrderA && hasOrderB && orderA !== orderB) {
+          return orderA - orderB;
+        }
+
+        if (hasOrderA !== hasOrderB) {
+          return hasOrderA ? -1 : 1;
+        }
+
+        return a.__rowIndex - b.__rowIndex;
+      })
+      .map((row, index) => ({
+        ...row,
+        displayOrder: index,
+      }));
+
+    reorderedRows.push(...genderRows);
   });
 
-  const missing = expectedKeys.filter((key) => !seen.has(key));
-  if (missing.length > 0) {
-    return {
-      error: 'rows must include full matrix for male/female and S/M/L/XL',
-      rows: [],
-    };
-  }
+  const cleanedRows = reorderedRows.map(({ __rowIndex, ...row }) => row);
 
   return {
     error: null,
-    rows: sortRows(normalizedRows),
+    rows: sortRows(cleanedRows),
   };
 };
 
@@ -458,12 +579,13 @@ const recommendSizeFromRows = ({ rows = [], heightCm, weightKg }) => {
     };
   }
 
+  const sizeOrder = buildRecommendationSizeOrder(rows);
   const orderedRows = (Array.isArray(rows) ? rows : [])
-    .filter((row) => SIZE_ORDER.has(String(row?.sizeLabel || '').toUpperCase()))
+    .filter((row) => sizeOrder.has(normalizeSizeLabel(row?.sizeLabel)))
     .slice()
     .sort((a, b) => {
-      const indexA = SIZE_ORDER.get(String(a?.sizeLabel || '').toUpperCase()) ?? Number.MAX_SAFE_INTEGER;
-      const indexB = SIZE_ORDER.get(String(b?.sizeLabel || '').toUpperCase()) ?? Number.MAX_SAFE_INTEGER;
+      const indexA = sizeOrder.get(normalizeSizeLabel(a?.sizeLabel)) ?? Number.MAX_SAFE_INTEGER;
+      const indexB = sizeOrder.get(normalizeSizeLabel(b?.sizeLabel)) ?? Number.MAX_SAFE_INTEGER;
       return indexA - indexB;
     });
 
@@ -477,11 +599,11 @@ const recommendSizeFromRows = ({ rows = [], heightCm, weightKg }) => {
   }
 
   const heightCenters = orderedRows.map((row) => ({
-    index: SIZE_ORDER.get(String(row?.sizeLabel || '').toUpperCase()),
+    index: sizeOrder.get(normalizeSizeLabel(row?.sizeLabel)),
     center: (Number(row?.heightMin) + Number(row?.heightMax)) / 2,
   }));
   const weightCenters = orderedRows.map((row) => ({
-    index: SIZE_ORDER.get(String(row?.sizeLabel || '').toUpperCase()),
+    index: sizeOrder.get(normalizeSizeLabel(row?.sizeLabel)),
     center: (Number(row?.weightMin) + Number(row?.weightMax)) / 2,
   }));
 
@@ -493,7 +615,7 @@ const recommendSizeFromRows = ({ rows = [], heightCm, weightKg }) => {
   );
 
   const candidates = orderedRows.map((row) => {
-    const rowIndex = SIZE_ORDER.get(String(row?.sizeLabel || '').toUpperCase()) ?? Number.MAX_SAFE_INTEGER;
+    const rowIndex = sizeOrder.get(normalizeSizeLabel(row?.sizeLabel)) ?? Number.MAX_SAFE_INTEGER;
     const heightAxis = getAxisProfile(normalizedHeight, row.heightMin, row.heightMax);
     const weightAxis = getAxisProfile(normalizedWeight, row.weightMin, row.weightMax);
     const bmiScore = getBmiScore(normalizedHeight, normalizedWeight, row);

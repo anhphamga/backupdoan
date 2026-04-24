@@ -6,7 +6,22 @@ const TABS = [
   { key: "size", label: "Bảng size" },
 ];
 
-const SIZE_ORDER = ['S', 'M', 'L', 'XL']
+const getSizeCenter = (row = {}) => {
+  const heightMin = Number(row?.heightMin)
+  const heightMax = Number(row?.heightMax)
+  const weightMin = Number(row?.weightMin)
+  const weightMax = Number(row?.weightMax)
+
+  const heightCenter = Number.isFinite(heightMin) && Number.isFinite(heightMax)
+    ? (heightMin + heightMax) / 2
+    : Number.POSITIVE_INFINITY
+
+  const weightCenter = Number.isFinite(weightMin) && Number.isFinite(weightMax)
+    ? (weightMin + weightMax) / 2
+    : Number.POSITIVE_INFINITY
+
+  return { heightCenter, weightCenter }
+}
 
 const formatRange = (minValue, maxValue) => {
   const minNum = Number(minValue)
@@ -45,7 +60,29 @@ export default function ProductDescription({
   const shouldCollapse = safeText.length > 280;
   const sortedSizeRows = useMemo(() => (
     (Array.isArray(sizeGuideRows) ? sizeGuideRows : []).slice().sort((a, b) => {
-      return SIZE_ORDER.indexOf(String(a?.sizeLabel || '').toUpperCase()) - SIZE_ORDER.indexOf(String(b?.sizeLabel || '').toUpperCase())
+      const orderA = Number(a?.displayOrder)
+      const orderB = Number(b?.displayOrder)
+      const hasOrderA = Number.isFinite(orderA)
+      const hasOrderB = Number.isFinite(orderB)
+      if (hasOrderA && hasOrderB && orderA !== orderB) {
+        return orderA - orderB
+      }
+
+      if (hasOrderA !== hasOrderB) {
+        return hasOrderA ? -1 : 1
+      }
+
+      const centerA = getSizeCenter(a)
+      const centerB = getSizeCenter(b)
+      if (centerA.heightCenter !== centerB.heightCenter) {
+        return centerA.heightCenter - centerB.heightCenter
+      }
+
+      if (centerA.weightCenter !== centerB.weightCenter) {
+        return centerA.weightCenter - centerB.weightCenter
+      }
+
+      return String(a?.sizeLabel || '').localeCompare(String(b?.sizeLabel || ''))
     })
   ), [sizeGuideRows])
 

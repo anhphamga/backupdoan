@@ -5,10 +5,15 @@ import {
     upsertOwnerGlobalSizeGuideApi,
 } from '../../services/owner.service'
 import {
+    addSizeGuideRow,
     createDefaultSizeGuideRows,
+    getSizeGuideMatrixError,
+    getSizeGuideRowsByGender,
+    normalizeSizeGuideLabel,
     normalizeSizeGuideRows,
+    removeSizeGuideRow,
+    reorderSizeGuideRows,
     SIZE_GUIDE_GENDERS,
-    SIZE_PRESETS,
 } from './product-form/formUtils'
 
 const GENDER_LABELS = {
@@ -23,10 +28,12 @@ const emptySummary = {
 
 export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSaved }) {
     const [rows, setRows] = useState(createDefaultSizeGuideRows())
+    const [sizeLabelDraftByGender, setSizeLabelDraftByGender] = useState({ male: '', female: '' })
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [removing, setRemoving] = useState(false)
     const [message, setMessage] = useState(emptySummary)
+    const [dragState, setDragState] = useState({ gender: '', fromIndex: -1, overIndex: -1 })
 
     useEffect(() => {
         if (!open) return
@@ -59,8 +66,9 @@ export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSav
 
     const validationError = useMemo(() => {
         const normalized = normalizeSizeGuideRows(rows)
-        if (normalized.length !== SIZE_PRESETS.length * SIZE_GUIDE_GENDERS.length) {
-            return 'Bảng size mặc định phải có đủ male/female cho S, M, L, XL.'
+        const matrixError = getSizeGuideMatrixError(normalized)
+        if (matrixError) {
+            return matrixError
         }
 
         const invalid = normalized.some((row) => (
@@ -82,6 +90,61 @@ export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSav
             ? 'Vui lòng nhập đủ chiều cao/cân nặng hợp lệ (min <= max), và số đo optional phải >= 0 nếu có nhập.'
             : ''
     }, [rows])
+
+    const handleAddSizeLabel = (gender) => {
+        const normalizedGender = String(gender || '').toLowerCase()
+        const normalizedLabel = normalizeSizeGuideLabel(sizeLabelDraftByGender?.[normalizedGender])
+        if (!normalizedLabel) {
+            setMessage({ success: '', error: 'Size mới không hợp lệ. Vui lòng nhập tối đa 20 ký tự.' })
+            return
+        }
+
+        setRows((prev) => addSizeGuideRow(prev, {
+            gender: normalizedGender,
+            sizeLabel: normalizedLabel,
+        }))
+        setSizeLabelDraftByGender((prev) => ({
+            ...prev,
+            [normalizedGender]: '',
+        }))
+        setMessage(emptySummary)
+    }
+
+    const handleRemoveRow = (gender, sizeLabel) => {
+        setRows((prev) => removeSizeGuideRow(prev, { gender, sizeLabel }))
+        setMessage(emptySummary)
+    }
+
+    const handleReorderRows = (gender, fromIndex, toIndex) => {
+        setRows((prev) => reorderSizeGuideRows(prev, { gender, fromIndex, toIndex }))
+        setMessage(emptySummary)
+    }
+
+    const startDrag = (gender, index) => {
+        setDragState({ gender, fromIndex: index, overIndex: index })
+    }
+
+    const dragOver = (event, gender, index) => {
+        event.preventDefault()
+        setDragState((prev) => {
+            if (prev.gender !== gender) return prev
+            if (prev.overIndex === index) return prev
+            return { ...prev, overIndex: index }
+        })
+    }
+
+    const dropRow = (event, gender, index) => {
+        event.preventDefault()
+        setDragState((prev) => {
+            if (prev.gender !== gender || prev.fromIndex < 0) return { gender: '', fromIndex: -1, overIndex: -1 }
+            handleReorderRows(gender, prev.fromIndex, index)
+            return { gender: '', fromIndex: -1, overIndex: -1 }
+        })
+    }
+
+    const endDrag = () => {
+        setDragState({ gender: '', fromIndex: -1, overIndex: -1 })
+    }
 
     const updateCell = (gender, sizeLabel, field, value) => {
         setRows((prev) => prev.map((row) => {
@@ -149,15 +212,43 @@ export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSav
                     {loading ? <p className="text-sm text-slate-500">Đang tải dữ liệu...</p> : null}
 
                     {SIZE_GUIDE_GENDERS.map((gender) => {
-                        const genderRows = SIZE_PRESETS
-                            .map((sizeLabel) => rows.find((row) => row.gender === gender && row.sizeLabel === sizeLabel))
-                            .filter(Boolean)
+                        const genderRows = getSizeGuideRowsByGender(rows, gender)
 
                         return (
                             <div key={gender} className="space-y-2">
-                                <p className="text-sm font-semibold text-slate-800">{GENDER_LABELS[gender]}</p>
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                    <p className="text-sm font-semibold text-slate-800">{GENDER_LABELS[gender]} - thêm size</p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <input
+                                            type="text"
+                                            maxLength={20}
+                                            className="h-9 w-full max-w-[220px] border border-slate-200 rounded-lg px-2 text-sm"
+                                            placeholder="Ví dụ: XXL"
+                                            value={sizeLabelDraftByGender?.[gender] || ''}
+                                            onChange={(event) => setSizeLabelDraftByGender((prev) => ({
+                                                ...prev,
+                                                [gender]: event.target.value,
+                                            }))}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter') {
+                                                    event.preventDefault()
+                                                    handleAddSizeLabel(gender)
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="h-9 px-3 rounded-lg border border-slate-200 text-sm font-medium"
+                                            onClick={() => handleAddSizeLabel(gender)}
+                                            disabled={loading || saving || removing}
+                                        >
+                                            Thêm size cho {GENDER_LABELS[gender]}
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="overflow-x-auto rounded-lg border border-slate-200">
-                                    <table className="w-full text-left border-collapse min-w-[760px]">
+                                    <table className="w-full text-left border-collapse min-w-[920px]">
                                         <thead className="bg-slate-50">
                                             <tr>
                                                 <th className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Size</th>
@@ -165,11 +256,20 @@ export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSav
                                                 <th className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Cân nặng (kg)</th>
                                                 <th className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Dài áo (cm)</th>
                                                 <th className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Rộng (cm)</th>
+                                                <th className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Thao tác</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {genderRows.map((row) => (
-                                                <tr key={`${row.gender}-${row.sizeLabel}`} className="border-t border-slate-100">
+                                            {genderRows.map((row, index) => (
+                                                <tr
+                                                    key={`${row.gender}-${row.sizeLabel}`}
+                                                    className={`border-t border-slate-100 ${dragState.gender === gender && dragState.overIndex === index ? 'bg-sky-50' : ''}`}
+                                                    draggable
+                                                    onDragStart={() => startDrag(gender, index)}
+                                                    onDragOver={(event) => dragOver(event, gender, index)}
+                                                    onDrop={(event) => dropRow(event, gender, index)}
+                                                    onDragEnd={endDrag}
+                                                >
                                                     <td className="px-3 py-2 text-sm font-semibold text-slate-700">{row.sizeLabel}</td>
                                                     <td className="px-3 py-2">
                                                         <RangeInput
@@ -192,7 +292,7 @@ export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSav
                                                             type="number"
                                                             min="0"
                                                             className="w-full h-9 border border-slate-200 rounded-lg px-2 text-sm"
-                                                            value={row.itemLength}
+                                                            value={String(row.itemLength ?? '')}
                                                             onChange={(event) => updateCell(gender, row.sizeLabel, 'itemLength', event.target.value)}
                                                         />
                                                     </td>
@@ -201,9 +301,21 @@ export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSav
                                                             type="number"
                                                             min="0"
                                                             className="w-full h-9 border border-slate-200 rounded-lg px-2 text-sm"
-                                                            value={row.itemWidth}
+                                                            value={String(row.itemWidth ?? '')}
                                                             onChange={(event) => updateCell(gender, row.sizeLabel, 'itemWidth', event.target.value)}
                                                         />
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="h-8 w-8 rounded border border-slate-200 text-slate-500 flex items-center justify-center cursor-grab" title="Kéo để sắp xếp">↕</span>
+                                                            <button
+                                                                type="button"
+                                                                className="h-8 px-2 rounded border border-rose-200 text-rose-600 text-xs font-medium"
+                                                                onClick={() => handleRemoveRow(gender, row.sizeLabel)}
+                                                            >
+                                                                Xóa
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -224,7 +336,7 @@ export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSav
                             onClick={handleDelete}
                             disabled={saving || removing || loading}
                         >
-                            {removing ? 'Đang xóa...' : 'Xóa bảng global'}
+                            {removing ? 'Đang xóa...' : 'Xóa bảng'}
                         </button>
                         <button
                             type="button"
@@ -232,7 +344,7 @@ export default function OwnerGlobalSizeGuideModal({ open = false, onClose, onSav
                             onClick={handleSave}
                             disabled={saving || removing || loading}
                         >
-                            {saving ? 'Đang lưu...' : 'Lưu bảng global'}
+                            {saving ? 'Đang lưu...' : 'Lưu bảng'}
                         </button>
                     </div>
                 </div>

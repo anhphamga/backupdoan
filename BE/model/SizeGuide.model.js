@@ -13,8 +13,10 @@ const toNumberOrNull = (value) => {
 const sizeGuideSchema = new mongoose.Schema({
   sizeLabel: {
     type: String,
-    enum: SIZE_LABELS,
     required: true,
+    trim: true,
+    uppercase: true,
+    maxlength: 20,
   },
   gender: {
     type: String,
@@ -52,6 +54,12 @@ const sizeGuideSchema = new mongoose.Schema({
     required: true,
     min: 0,
   },
+  displayOrder: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: 0,
+  },
   itemLength: {
     type: Number,
     default: null,
@@ -69,6 +77,10 @@ const sizeGuideSchema = new mongoose.Schema({
 });
 
 sizeGuideSchema.pre('validate', function ensureTypeConsistency() {
+  if (!this.sizeLabel || !String(this.sizeLabel).trim()) {
+    throw new Error('sizeLabel is required');
+  }
+
   if (this.type === 'global') {
     this.productId = null;
   }

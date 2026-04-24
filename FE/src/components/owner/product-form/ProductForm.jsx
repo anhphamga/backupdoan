@@ -5,12 +5,16 @@ import SizeGuideSection from './SizeGuideSection'
 import ImageSection from './ImageSection'
 import InventorySummary from './InventorySummary'
 import {
+    addSizeGuideRow,
     calculateTotalQuantity,
     createDefaultSizeGuideRows,
     createOwnerProductPayload,
     createValidationErrors,
+    normalizeSizeGuideLabel,
+    normalizeSizeGuideRows,
     normalizeSizeRows,
-    SIZE_PRESETS,
+    removeSizeGuideRow,
+    reorderSizeGuideRows,
     toPositiveInteger,
     toText,
 } from './formUtils'
@@ -45,6 +49,7 @@ export default function ProductForm({
 }) {
     const [form, setForm] = useState(buildInitialState(initialValues))
     const [sizeDraft, setSizeDraft] = useState('')
+    const [sizeGuideLabelDraftByGender, setSizeGuideLabelDraftByGender] = useState({ male: '', female: '' })
     const [imageUrlDraft, setImageUrlDraft] = useState('')
     const [errors, setErrors] = useState({})
     const fileItemsRef = useRef([])
@@ -54,6 +59,7 @@ export default function ProductForm({
         setForm(nextState)
         setErrors({})
         setSizeDraft('')
+        setSizeGuideLabelDraftByGender({ male: '', female: '' })
         setImageUrlDraft('')
     }, [initialValues])
 
@@ -159,10 +165,9 @@ export default function ProductForm({
         setErrors((prev) => ({ ...prev, sizeGuideRows: '' }))
     }
 
-    const updateSizeGuideCell = (gender, rowIndex, field, value) => {
+    const updateSizeGuideCell = (gender, sizeLabel, field, value) => {
         setForm((prev) => {
             const rows = Array.isArray(prev.sizeGuideRows) ? prev.sizeGuideRows.slice() : createDefaultSizeGuideRows()
-            const sizeLabel = SIZE_PRESETS[rowIndex]
             const targetIndex = rows.findIndex((row) => row.gender === gender && row.sizeLabel === sizeLabel)
             if (targetIndex < 0) return prev
 
@@ -173,7 +178,59 @@ export default function ProductForm({
 
             return {
                 ...prev,
-                sizeGuideRows: rows,
+                sizeGuideRows: normalizeSizeGuideRows(rows),
+            }
+        })
+        setErrors((prev) => ({ ...prev, sizeGuideRows: '' }))
+    }
+
+    const addSizeGuideLabel = (gender, value = '') => {
+        const normalizedGender = toText(gender).toLowerCase()
+        const draftLabel = sizeGuideLabelDraftByGender?.[normalizedGender] || ''
+        const normalizedLabel = normalizeSizeGuideLabel(value || draftLabel)
+        if (!normalizedLabel) {
+            setErrors((prev) => ({
+                ...prev,
+                sizeGuideRows: 'Size mới không hợp lệ. Vui lòng nhập tối đa 20 ký tự.',
+            }))
+            return
+        }
+
+        setForm((prev) => {
+            const currentRows = Array.isArray(prev.sizeGuideRows) ? prev.sizeGuideRows : createDefaultSizeGuideRows()
+            return {
+                ...prev,
+                sizeGuideRows: addSizeGuideRow(currentRows, {
+                    gender: normalizedGender,
+                    sizeLabel: normalizedLabel,
+                }),
+            }
+        })
+
+        setSizeGuideLabelDraftByGender((prev) => ({
+            ...prev,
+            [normalizedGender]: '',
+        }))
+        setErrors((prev) => ({ ...prev, sizeGuideRows: '' }))
+    }
+
+    const removeSizeGuideLabel = (gender, sizeLabel) => {
+        setForm((prev) => {
+            const currentRows = Array.isArray(prev.sizeGuideRows) ? prev.sizeGuideRows : []
+            return {
+                ...prev,
+                sizeGuideRows: removeSizeGuideRow(currentRows, { gender, sizeLabel }),
+            }
+        })
+        setErrors((prev) => ({ ...prev, sizeGuideRows: '' }))
+    }
+
+    const reorderSizeGuide = (gender, fromIndex, toIndex) => {
+        setForm((prev) => {
+            const currentRows = Array.isArray(prev.sizeGuideRows) ? prev.sizeGuideRows : []
+            return {
+                ...prev,
+                sizeGuideRows: reorderSizeGuideRows(currentRows, { gender, fromIndex, toIndex }),
             }
         })
         setErrors((prev) => ({ ...prev, sizeGuideRows: '' }))
@@ -293,6 +350,17 @@ export default function ProductForm({
                 rows={form.sizeGuideRows}
                 onModeChange={updateSizeGuideMode}
                 onUpdateCell={updateSizeGuideCell}
+                sizeLabelDraftByGender={sizeGuideLabelDraftByGender}
+                onSizeLabelDraftChange={(gender, value) => {
+                    const normalizedGender = toText(gender).toLowerCase()
+                    setSizeGuideLabelDraftByGender((prev) => ({
+                        ...prev,
+                        [normalizedGender]: value,
+                    }))
+                }}
+                onAddSizeLabel={addSizeGuideLabel}
+                onDeleteSizeLabel={removeSizeGuideLabel}
+                onReorderRows={reorderSizeGuide}
                 errors={errors}
             />
 
