@@ -8,6 +8,7 @@ const router = express.Router();
 router.get('/overview', requireAuth, requireOwner, shiftAnalyticsController.getOverview);
 router.get('/revenue-by-shift', requireAuth, requireOwner, shiftAnalyticsController.getRevenueByShift);
 router.get('/staff-performance', requireAuth, requireOwner, shiftAnalyticsController.getStaffPerformance);
+router.get('/staff-orders', requireAuth, requireOwner, shiftAnalyticsController.getStaffOrders);
 router.get('/peak-shifts', requireAuth, requireOwner, shiftAnalyticsController.getPeakShifts);
 router.get('/daily-summary', requireAuth, requireOwner, shiftAnalyticsController.getDailySummary);
 

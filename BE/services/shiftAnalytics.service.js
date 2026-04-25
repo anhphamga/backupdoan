@@ -4,6 +4,7 @@ const SaleOrder = require('../model/SaleOrder.model');
 const RentOrder = require('../model/RentOrder.model');
 const User = require('../model/User.model');
 const { buildSaleRevenueMatch, buildRentRevenueMatch } = require('../utils/revenueFilters');
+const mongoose = require('mongoose');
 
 const normalizeDateInput = (value) => {
   const date = new Date(value);
@@ -145,6 +146,29 @@ const aggregateWorkedRegistrations = async (shiftIds = []) => {
   ]);
 };
 
+const normalizeStaffIdInput = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    const error = new Error('INVALID_STAFF_ID');
+    error.statusCode = 400;
+    error.message = 'staffId là bắt buộc.';
+    throw error;
+  }
+  if (!mongoose.Types.ObjectId.isValid(raw)) {
+    const error = new Error('INVALID_STAFF_ID');
+    error.statusCode = 400;
+    error.message = 'staffId không hợp lệ.';
+    throw error;
+  }
+  return raw;
+};
+
+const normalizePaginationInput = ({ page, limit }) => {
+  const currentPage = Math.max(Number(page) || 1, 1);
+  const pageSize = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  return { currentPage, pageSize };
+};
+
 const getShiftAnalyticsOverview = async ({ startDate, endDate }) => {
   const { start, endExclusive } = resolveDateRange({ startDate, endDate });
   const shifts = await getShiftsInRange({ start, endExclusive });
@@ -196,6 +220,126 @@ const getShiftAnalyticsOverview = async ({ startDate, endDate }) => {
     totalSaleOrders,
     totalStaffWorked,
     averageRevenuePerShift,
+  };
+};
+
+const getStaffOrders = async ({ startDate, endDate, staffId, page, limit }) => {
+  const { start, endExclusive } = resolveDateRange({ startDate, endDate });
+  const normalizedStaffId = normalizeStaffIdInput(staffId);
+  const { currentPage, pageSize } = normalizePaginationInput({ page, limit });
+
+  const shifts = await getShiftsInRange({ start, endExclusive });
+  const shiftIds = shifts.map((s) => s._id);
+  if (!shiftIds.length) {
+    return {
+      orders: [],
+      pagination: {
+        page: currentPage,
+        limit: pageSize,
+        total: 0,
+        pages: 1,
+      },
+    };
+  }
+
+  const staffObjectId = new mongoose.Types.ObjectId(normalizedStaffId);
+  const saleMatch = buildSaleRevenueMatch({ shiftId: { $in: shiftIds }, staffId: staffObjectId });
+  const rentMatch = buildRentRevenueMatch({ shiftId: { $in: shiftIds }, staffId: staffObjectId });
+
+  const skip = (currentPage - 1) * pageSize;
+  const userCollection = User.collection.name;
+  const rentCollection = RentOrder.collection.name;
+
+  const rows = await SaleOrder.aggregate([
+    { $match: saleMatch },
+    {
+      $project: {
+        _id: 1,
+        orderType: { $literal: 'sale' },
+        createdAt: 1,
+        totalAmount: 1,
+        status: 1,
+        customerId: 1,
+        guestName: 1,
+        guestContact: 1,
+        shippingPhone: 1,
+      },
+    },
+    {
+      $unionWith: {
+        coll: rentCollection,
+        pipeline: [
+          { $match: rentMatch },
+          {
+            $project: {
+              _id: 1,
+              orderType: { $literal: 'rent' },
+              createdAt: 1,
+              totalAmount: 1,
+              status: 1,
+              customerId: 1,
+              guestName: 1,
+              guestContact: 1,
+              shippingPhone: { $literal: null },
+            },
+          },
+        ],
+      },
+    },
+    { $sort: { createdAt: -1, _id: -1 } },
+    {
+      $facet: {
+        items: [
+          { $skip: skip },
+          { $limit: pageSize },
+          { $lookup: { from: userCollection, localField: 'customerId', foreignField: '_id', as: 'customer' } },
+          { $addFields: { customer: { $arrayElemAt: ['$customer', 0] } } },
+          {
+            $addFields: {
+              customerName: {
+                $ifNull: [
+                  '$customer.name',
+                  { $ifNull: ['$guestName', { $ifNull: ['$guestContact.name', ''] }] },
+                ],
+              },
+              customerPhone: {
+                $ifNull: [
+                  '$customer.phone',
+                  { $ifNull: ['$shippingPhone', { $ifNull: ['$guestContact.phone', ''] }] },
+                ],
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              orderType: 1,
+              createdAt: 1,
+              totalAmount: 1,
+              status: 1,
+              customerName: 1,
+              customerPhone: 1,
+            },
+          },
+        ],
+        totalCount: [{ $count: 'count' }],
+      },
+    },
+  ]);
+
+  const payload = rows?.[0] || {};
+  const orders = Array.isArray(payload.items) ? payload.items : [];
+  const total = Number(payload?.totalCount?.[0]?.count || 0);
+  const pages = Math.max(Math.ceil(total / pageSize), 1);
+
+  return {
+    orders,
+    pagination: {
+      page: currentPage,
+      limit: pageSize,
+      total,
+      pages,
+    },
   };
 };
 
@@ -387,6 +531,7 @@ module.exports = {
   getShiftAnalyticsOverview,
   getRevenueByShift,
   getStaffPerformance,
+  getStaffOrders,
   getPeakShifts,
   getDailySummary,
 };
