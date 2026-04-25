@@ -4,6 +4,7 @@ import { LOW_STOCK_THRESHOLD } from '../config/inventory.constants'
 import { getInventoryDashboardBundleApi } from '../api/inventory.api'
 import { normalizeSizeStock, toDisplayText } from '../utils/inventory.transformers'
 import { toArray } from '../../../utils/owner.utils'
+import { getProductPrimaryImageUrl } from '../../../utils/imageUrl'
 
 const addDays = (date, amount) => {
   const next = new Date(date)
@@ -99,7 +100,7 @@ export const useInventoryDashboardData = () => {
 
         return {
           id,
-          image: product?.images?.[0] || UI_IMAGE_FALLBACKS.ownerProductCard,
+          image: getProductPrimaryImageUrl(product) || UI_IMAGE_FALLBACKS.ownerProductCard,
           name,
           category,
           sizeRows,
