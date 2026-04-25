@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import axiosClient from '../../config/axios';
 
 const LAST_COLLECTION_SLUG_KEY = 'last_collection_slug';
 const toText = (value) => String(value || '').trim();
@@ -25,9 +26,8 @@ export default function CollectionEntryPage() {
       }
 
       try {
-        const response = await fetch('/api/categories');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const payload = await response.json();
+        const response = await axiosClient.get('/categories', { skipAuthRedirect: true });
+        const payload = response?.data || {};
         const categories = Array.isArray(payload?.categories) ? payload.categories : [];
 
         const firstCollectionSlug = categories

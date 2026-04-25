@@ -7,6 +7,7 @@ import {
     getOwnerProductsApi,
     importOwnerProductsApi
 } from '../../services/owner.service'
+import axiosClient from '../../config/axios'
 import { currencyFormatter, toArray } from '../../utils/owner.utils'
 import { flattenCategoryNames, normalizeCategoryTree } from '../../utils/categoryTree'
 import AddProductModal from './AddProductModal'
@@ -145,8 +146,8 @@ export default function ProductsList({ onSelectProduct, initialPage = 1 }) {
 
         const loadCategories = async () => {
             try {
-                const response = await fetch('/api/categories?lang=vi')
-                const payload = response.ok ? await response.json() : { categories: [] }
+                const response = await axiosClient.get('/categories', { params: { lang: 'vi' }, skipAuthRedirect: true })
+                const payload = response?.data || { categories: [] }
                 if (!mounted) {
                     return
                 }
