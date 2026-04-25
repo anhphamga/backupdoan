@@ -12,6 +12,7 @@ import ReviewSummary from "../../components/review/ReviewSummary";
 import { useBuyCart } from "../../contexts/BuyCartContext";
 import { useFavorites } from "../../contexts/FavoritesContext";
 import { useRentalCart } from "../../contexts/RentalCartContext";
+import axiosClient from "../../config/axios";
 import { getProductReviewsApi } from "../../services/review.service";
 import { formatConditionLabel } from "../../utils/formatConditionLabel";
 
@@ -133,11 +134,15 @@ export default function ProductDetailPage() {
     const run = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/products/${id}`);
-        const data = res.ok ? await res.json() : { data: null };
+        const response = await axiosClient.get(`/products/${id}`, { skipAuthRedirect: true });
+        const data = response?.data || { data: null };
         if (!mounted) return;
         setProduct(data?.data || null);
         setSelectedImageIndex(0);
+      } catch {
+        if (mounted) {
+          setProduct(null);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -153,10 +158,10 @@ export default function ProductDetailPage() {
     let mounted = true;
     const run = async () => {
       try {
-        const params = new URLSearchParams();
-        if (sizeGuideGender) params.set('gender', sizeGuideGender);
-        const response = await fetch(`/api/products/${id}/size-guide?${params.toString()}`);
-        const payload = response.ok ? await response.json() : { data: { rows: [], source: 'global' } };
+        const params = {};
+        if (sizeGuideGender) params.gender = sizeGuideGender;
+        const response = await axiosClient.get(`/products/${id}/size-guide`, { params, skipAuthRedirect: true });
+        const payload = response?.data || { data: { rows: [], source: 'global' } };
 
         if (!mounted) return;
         const rows = Array.isArray(payload?.data?.rows) ? payload.data.rows : [];
@@ -189,8 +194,8 @@ export default function ProductDetailPage() {
     let mounted = true;
     const run = async () => {
       try {
-        const response = await fetch(`/api/products/${id}/available-instances`);
-        const payload = response.ok ? await response.json() : { data: [] };
+        const response = await axiosClient.get(`/products/${id}/available-instances`, { skipAuthRedirect: true });
+        const payload = response?.data || { data: [] };
         if (!mounted) return;
         const instances = Array.isArray(payload?.data)
           ? payload.data
@@ -533,9 +538,11 @@ export default function ProductDetailPage() {
     const run = async () => {
       try {
         setRelatedLoading(true);
-        const params = new URLSearchParams({ limit: "4" });
-        const res = await fetch(`/api/products/${product._id}/similar?${params.toString()}`);
-        const data = res.ok ? await res.json() : { data: [] };
+        const response = await axiosClient.get(`/products/${product._id}/similar`, {
+          params: { limit: "4" },
+          skipAuthRedirect: true,
+        });
+        const data = response?.data || { data: [] };
         if (!mounted) return;
         const items = Array.isArray(data?.data) ? data.data : [];
         setRelatedProducts(items.filter((item) => item?._id && item._id !== product._id).slice(0, 4));
@@ -621,17 +628,11 @@ export default function ProductDetailPage() {
         params.set('gender', sizeGuideGender);
       }
 
-      const response = await fetch(`/api/products/${id}/size-guide/recommendation?${params.toString()}`);
-      const payload = response.ok
-        ? await response.json()
-        : await response.json().catch(() => ({ message: 'Không thể tính size lúc này.' }));
-
-      if (!response.ok) {
-        setSizeRecommendationResult(null);
-        setSizeRecommendationError(payload?.message || 'Không thể tính size lúc này.');
-        return;
-      }
-
+      const response = await axiosClient.get(`/products/${id}/size-guide/recommendation`, {
+        params: Object.fromEntries(params.entries()),
+        skipAuthRedirect: true,
+      });
+      const payload = response?.data || {};
       const data = payload?.data || null;
       setSizeRecommendationResult(data);
 
@@ -639,9 +640,14 @@ export default function ProductDetailPage() {
       if (recommendedGender === 'male' || recommendedGender === 'female') {
         setSizeGuideGender(recommendedGender);
       }
-    } catch {
+    } catch (error) {
       setSizeRecommendationResult(null);
-      setSizeRecommendationError('Không thể tính size lúc này. Vui lòng thử lại.');
+      const message =
+        error?.response?.data?.message
+        || error?.response?.data?.error
+        || error?.message
+        || 'Không thể tính size lúc này. Vui lòng thử lại.';
+      setSizeRecommendationError(message);
     } finally {
       setSizeRecommendationLoading(false);
     }

@@ -10,6 +10,7 @@ import {
     updateOwnerProductApi,
     upsertOwnerProductSizeGuideApi,
 } from '../../services/owner.service'
+import axiosClient from '../../config/axios'
 import { findCategoryPathFromProduct, normalizeCategoryTree } from '../../utils/categoryTree'
 import ProductForm from './product-form/ProductForm'
 
@@ -79,8 +80,8 @@ export default function ProductDetail({ productId, onBack, onSaved }) {
         let mounted = true
         const loadCategories = async () => {
             try {
-                const response = await fetch('/api/categories?lang=vi')
-                const payload = response.ok ? await response.json() : { categories: [] }
+                const response = await axiosClient.get('/categories', { params: { lang: 'vi' }, skipAuthRedirect: true })
+                const payload = response?.data || { categories: [] }
                 if (!mounted) return
                 setCategoryTree(normalizeCategoryTree(payload?.categories))
             } catch {
