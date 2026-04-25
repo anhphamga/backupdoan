@@ -15,6 +15,9 @@ const normalizeParams = (params = {}) => {
   else delete next.startDate
   if (endDate) next.endDate = endDate
   else delete next.endDate
+  if (next.staffId) next.staffId = asText(next.staffId)
+  if (next.page) next.page = Number(next.page) || 1
+  if (next.limit) next.limit = Number(next.limit) || 20
   if (next.groupBy) next.groupBy = asText(next.groupBy)
   if (next.metric) next.metric = asText(next.metric)
   return next
@@ -30,6 +33,10 @@ export const getShiftRevenueByShift = (params = {}) => {
 
 export const getShiftStaffPerformance = (params = {}) => {
   return axiosClient.get('/shift-analytics/staff-performance', { params: normalizeParams(params) })
+}
+
+export const getShiftStaffOrders = (params = {}) => {
+  return axiosClient.get('/shift-analytics/staff-orders', { params: normalizeParams(params) })
 }
 
 export const getShiftPeakShifts = (params = {}) => {

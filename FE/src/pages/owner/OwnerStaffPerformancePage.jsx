@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Calendar, RefreshCw, TrendingUp } from 'lucide-react'
+import { Calendar, RefreshCw, TrendingUp, X } from 'lucide-react'
 import { useStaffPerformance } from '../../hooks/useStaffPerformance'
+import { getShiftStaffOrders } from '../../api/shiftAnalyticsApi'
 
 const KPI_THRESHOLD = 2000 // đồng/giờ
 
@@ -28,6 +29,17 @@ const getDateRange = () => {
 
 export default function OwnerStaffPerformancePage() {
   const [dateRange, setDateRange] = useState(getDateRange())
+  const [ordersModal, setOrdersModal] = useState({
+    open: false,
+    staffId: '',
+    staffName: '',
+  })
+  const [staffOrders, setStaffOrders] = useState({
+    loading: false,
+    error: '',
+    orders: [],
+    pagination: { page: 1, pages: 1, total: 0, limit: 20 },
+  })
 
   const { data, kpis, loading, error, refetch } = useStaffPerformance({
     startDate: dateRange.startDate,
@@ -45,6 +57,64 @@ export default function OwnerStaffPerformancePage() {
 
   const handleRefresh = async () => {
     await refetch()
+  }
+
+  const resolveOrdersPayload = (response) => {
+    const raw = response?.data?.data ?? response?.data ?? {}
+    const orders = Array.isArray(raw?.orders) ? raw.orders : Array.isArray(raw?.data) ? raw.data : []
+    const pagination = raw?.pagination || {}
+    return {
+      orders,
+      pagination: {
+        page: Number(pagination?.page || 1),
+        pages: Number(pagination?.pages || 1),
+        total: Number(pagination?.total || orders.length || 0),
+        limit: Number(pagination?.limit || 20),
+      },
+    }
+  }
+
+  const loadStaffOrders = async ({ staffId, staffName, page = 1 } = {}) => {
+    if (!staffId) return
+
+    setOrdersModal({ open: true, staffId, staffName: staffName || '' })
+    setStaffOrders((prev) => ({
+      ...prev,
+      loading: true,
+      error: '',
+      orders: page === 1 ? [] : prev.orders,
+      pagination: { ...prev.pagination, page },
+    }))
+
+    try {
+      const response = await getShiftStaffOrders({
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        staffId,
+        page,
+        limit: staffOrders.pagination.limit,
+      })
+      const payload = resolveOrdersPayload(response)
+      setStaffOrders({
+        loading: false,
+        error: '',
+        orders: payload.orders,
+        pagination: payload.pagination,
+      })
+    } catch (err) {
+      setStaffOrders((prev) => ({
+        ...prev,
+        loading: false,
+        orders: [],
+        pagination: { ...prev.pagination, total: 0, pages: 1, page: 1 },
+        error: err?.response?.data?.message || err?.message || 'Không thể tải đơn hàng của nhân viên',
+      }))
+    }
+  }
+
+  const closeOrdersModal = () => {
+    setOrdersModal({ open: false, staffId: '', staffName: '' })
+    setStaffOrders({ loading: false, error: '', orders: [], pagination: { page: 1, pages: 1, total: 0, limit: 20 } })
   }
 
   // KPI Cards
@@ -210,7 +280,14 @@ export default function OwnerStaffPerformancePage() {
                     {staff.rankMedal || `${staff.rank}`}
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                    {staff.staffName}
+                    <button
+                      type="button"
+                      className="text-left font-semibold text-blue-700 hover:text-blue-800 hover:underline"
+                      onClick={() => loadStaffOrders({ staffId: staff.staffId, staffName: staff.staffName, page: 1 })}
+                      title="Xem đơn hàng nhân viên đã xử lí"
+                    >
+                      {staff.staffName}
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-slate-700">
                     {formatNumber(staff.totalShifts)}
@@ -247,6 +324,125 @@ export default function OwnerStaffPerformancePage() {
           </tbody>
         </table>
       </div>
+
+      {ordersModal.open && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Đơn hàng nhân viên: {ordersModal.staffName || ordersModal.staffId}
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Hiển thị các đơn đã hoàn tất trong khoảng {dateRange.startDate} → {dateRange.endDate}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeOrdersModal}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
+                aria-label="Đóng"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5">
+              {staffOrders.error ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                  {staffOrders.error}
+                </div>
+              ) : null}
+
+              <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Mã đơn</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Loại</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Khách</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">SĐT</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600">Tổng</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600">Ngày</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {staffOrders.loading ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                          Đang tải đơn hàng...
+                        </td>
+                      </tr>
+                    ) : staffOrders.orders.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                          Không có đơn hàng
+                        </td>
+                      </tr>
+                    ) : (
+                      staffOrders.orders.map((order) => (
+                        <tr key={`${order.orderType}-${order._id}`} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-sm font-semibold text-slate-900">{String(order._id || '')}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">
+                            {order.orderType === 'rent' ? 'Thuê' : 'Mua'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{order.customerName || 'N/A'}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{order.customerPhone || 'N/A'}</td>
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">
+                            {formatCurrency(order.totalAmount || 0)}
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm text-slate-700">
+                            {order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : 'N/A'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-600">
+                  Tổng: <span className="font-semibold">{formatNumber(staffOrders.pagination.total)}</span> đơn
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    disabled={staffOrders.loading || staffOrders.pagination.page <= 1}
+                    onClick={() =>
+                      loadStaffOrders({
+                        staffId: ordersModal.staffId,
+                        staffName: ordersModal.staffName,
+                        page: Math.max(1, staffOrders.pagination.page - 1),
+                      })
+                    }
+                  >
+                    Trang trước
+                  </button>
+                  <span className="text-sm text-slate-600">
+                    {staffOrders.pagination.page}/{staffOrders.pagination.pages}
+                  </span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    disabled={staffOrders.loading || staffOrders.pagination.page >= staffOrders.pagination.pages}
+                    onClick={() =>
+                      loadStaffOrders({
+                        staffId: ordersModal.staffId,
+                        staffName: ordersModal.staffName,
+                        page: Math.min(staffOrders.pagination.pages, staffOrders.pagination.page + 1),
+                      })
+                    }
+                  >
+                    Trang sau
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary Stats */}
       {!loading && data.length > 0 && (

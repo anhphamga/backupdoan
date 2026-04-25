@@ -75,6 +75,45 @@ const getStaffPerformance = async (req, res) => {
   }
 };
 
+const getStaffOrders = async (req, res) => {
+  try {
+    const {
+      startDate,
+      endDate,
+      staffId,
+      page,
+      limit,
+    } = req.query || {};
+
+    const data = await shiftAnalyticsService.getStaffOrders({
+      startDate,
+      endDate,
+      staffId,
+      page,
+      limit,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Lấy đơn hàng theo nhân viên thành công.',
+      data,
+    });
+  } catch (error) {
+    const statusCode = error?.statusCode || 500;
+    if (statusCode !== 500) {
+      return res.status(statusCode).json({
+        success: false,
+        message: error?.message || 'Dữ liệu không hợp lệ.',
+      });
+    }
+    console.error('Shift analytics staff-orders error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể lấy đơn hàng lúc này.',
+    });
+  }
+};
+
 const getPeakShifts = async (req, res) => {
   try {
     const { startDate, endDate, metric } = req.query || {};
@@ -129,6 +168,7 @@ module.exports = {
   getOverview,
   getRevenueByShift,
   getStaffPerformance,
+  getStaffOrders,
   getPeakShifts,
   getDailySummary,
 };
