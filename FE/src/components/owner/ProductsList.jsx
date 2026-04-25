@@ -8,6 +8,7 @@ import {
     importOwnerProductsApi
 } from '../../services/owner.service'
 import axiosClient from '../../config/axios'
+import { getProductPrimaryImageUrl } from '../../utils/imageUrl'
 import { currencyFormatter, toArray } from '../../utils/owner.utils'
 import { flattenCategoryNames, normalizeCategoryTree } from '../../utils/categoryTree'
 import AddProductModal from './AddProductModal'
@@ -583,6 +584,7 @@ export default function ProductsList({ onSelectProduct, initialPage = 1 }) {
                                     const productCategory = toDisplayText(product.category) || 'Không có'
                                     const productSize = getDisplaySizes(product)
                                     const productColor = toDisplayText(product.color) || 'Không có'
+                                    const productImageSrc = getProductPrimaryImageUrl(product) || UI_IMAGE_FALLBACKS.ownerProductCard
 
                                     return (
                                         <tr
@@ -600,9 +602,15 @@ export default function ProductsList({ onSelectProduct, initialPage = 1 }) {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <img
-                                                    src={product?.images?.[0] || UI_IMAGE_FALLBACKS.ownerProductCard}
+                                                    src={productImageSrc}
                                                     alt={productName}
                                                     className="w-12 h-12 rounded-lg object-cover bg-slate-100"
+                                                    onError={(event) => {
+                                                        const target = event.currentTarget
+                                                        if (target.dataset.fallbackApplied === '1') return
+                                                        target.dataset.fallbackApplied = '1'
+                                                        target.src = UI_IMAGE_FALLBACKS.ownerProductCard
+                                                    }}
                                                 />
                                             </td>
                                             <td className="px-6 py-4">
@@ -651,30 +659,40 @@ export default function ProductsList({ onSelectProduct, initialPage = 1 }) {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                    {paginatedProducts.map((product) => (
-                        <div
-                            key={product._id || product.id}
-                            onClick={() => onSelectProduct(product._id || product.id, { page: safeCurrentPage })}
-                            className="group relative bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-lg cursor-pointer"
-                        >
-                            <div className="relative aspect-3/4 overflow-hidden bg-slate-100">
-                                <img
-                                    src={product?.images?.[0] || UI_IMAGE_FALLBACKS.ownerProductGrid}
-                                    alt={toDisplayText(product.name) || 'Sản phẩm'}
-                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                />
-                            </div>
-                            <div className="p-5">
-                                <h3 className="font-bold text-slate-900 line-clamp-1">{toDisplayText(product.name) || 'Không có'}</h3>
-                                <p className="text-sm text-slate-500 mb-2">{toDisplayText(product.category) || 'Không có'}</p>
-                                <p className="text-sm text-slate-500 mb-3">{getDisplaySizes(product)} • {toDisplayText(product.color) || 'Không có'}</p>
-                                <div className="flex flex-col">
-                                    <span className="text-xs text-slate-400 font-medium">Giá thuê</span>
-                                    <span className="text-lg font-bold text-[#1975d2]">{currencyFormatter.format(Number(product.baseRentPrice || 0))}</span>
+                    {paginatedProducts.map((product) => {
+                        const productImageSrc = getProductPrimaryImageUrl(product) || UI_IMAGE_FALLBACKS.ownerProductGrid
+
+                        return (
+                            <div
+                                key={product._id || product.id}
+                                onClick={() => onSelectProduct(product._id || product.id, { page: safeCurrentPage })}
+                                className="group relative bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-lg cursor-pointer"
+                            >
+                                <div className="relative aspect-3/4 overflow-hidden bg-slate-100">
+                                    <img
+                                        src={productImageSrc}
+                                        alt={toDisplayText(product.name) || 'Sản phẩm'}
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                        onError={(event) => {
+                                            const target = event.currentTarget
+                                            if (target.dataset.fallbackApplied === '1') return
+                                            target.dataset.fallbackApplied = '1'
+                                            target.src = UI_IMAGE_FALLBACKS.ownerProductGrid
+                                        }}
+                                    />
+                                </div>
+                                <div className="p-5">
+                                    <h3 className="font-bold text-slate-900 line-clamp-1">{toDisplayText(product.name) || 'Không có'}</h3>
+                                    <p className="text-sm text-slate-500 mb-2">{toDisplayText(product.category) || 'Không có'}</p>
+                                    <p className="text-sm text-slate-500 mb-3">{getDisplaySizes(product)} • {toDisplayText(product.color) || 'Không có'}</p>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs text-slate-400 font-medium">Giá thuê</span>
+                                        <span className="text-lg font-bold text-[#1975d2]">{currencyFormatter.format(Number(product.baseRentPrice || 0))}</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
 
