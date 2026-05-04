@@ -733,20 +733,6 @@ export default function CartPage() {
   }
 
   const handleCheckout = async ({ skipGuestVerification = false, session = guestVerificationSession } = {}) => {
-    // Bước 1 — gate verify guest: nếu chưa đăng nhập & có ít nhất 1 loại đơn → cần verify email
-    if (!isAuthenticated && (buyItems.length > 0 || rentalItems.length > 0) && !skipGuestVerification && !session?.verificationToken) {
-      // Với rental-only: lấy email từ rentGuestForm (sau khi validate cơ bản) làm gợi ý cho modal
-      if (buyItems.length === 0 && rentalItems.length > 0) {
-        const { errors: guestErrors, sanitized: guestSanitized } = validateRentGuestForm(rentGuestForm)
-        if (Object.keys(guestErrors).length > 0) {
-          setRentGuestFieldErrors(guestErrors)
-          return setRentalError('Vui lòng nhập đầy đủ thông tin liên hệ trước khi xác minh email.')
-        }
-        setRentGuestForm(guestSanitized)
-      }
-      setPendingGuestCheckout('combined')
-      return setGuestVerificationOpen(true)
-    }
     if (rentalItems.length > 0 && rentalItems.some((item) => !item.rentStartDate || !item.rentEndDate)) {
       return setRentalError('Vui lòng chọn ngày thuê cho tất cả sản phẩm.')
     }
@@ -816,11 +802,6 @@ export default function CartPage() {
           if (Object.keys(guestErrors).length > 0) {
             setRentGuestFieldErrors(guestErrors)
             throw new Error('Vui lòng nhập đầy đủ thông tin liên hệ cho đơn thuê guest.')
-          }
-          // Email guest phải trùng email đã verify
-          const verifiedEmail = normalizeEmail(session?.guestVerification?.email || '')
-          if (!verifiedEmail || verifiedEmail !== guestSanitized.email) {
-            throw new Error('Email thuê phải trùng với email đã xác minh.')
           }
           guestRentEmail = guestSanitized.email
           rentalResponse = await createGuestRentOrderApi({
@@ -917,7 +898,12 @@ export default function CartPage() {
         setBuyError(msg)
       }
 
-      if (!isAuthenticated && err.response?.status === 401) {
+      const backendMessage = normalizeDisplayText(err.response?.data?.message || '')
+      const requiresGuestVerification = !isAuthenticated && (
+        err.response?.status === 401
+        || (err.response?.status === 400 && backendMessage.includes('Thiếu token xác minh guest'))
+      )
+      if (requiresGuestVerification) {
         setGuestVerificationSession(null)
         setPendingGuestCheckout('combined')
         setGuestVerificationOpen(true)

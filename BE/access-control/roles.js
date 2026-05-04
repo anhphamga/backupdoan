@@ -35,6 +35,7 @@ const DEFAULT_ROLES = {
       PERMISSIONS.inventory.item.update_condition,
       PERMISSIONS.inventory.item.update_lifecycle,
       PERMISSIONS.customers.contact.read_masked,
+      PERMISSIONS.customers.contact.read_full,
       PERMISSIONS.blog.post.create,
       PERMISSIONS.blog.post.update,
       PERMISSIONS.blog.post.delete,

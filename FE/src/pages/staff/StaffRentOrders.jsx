@@ -53,6 +53,30 @@ const getCustomerText = (customer) => {
   return 'N/A'
 }
 
+const getCustomerDetail = (customer) => {
+  if (!customer) return null
+  if (typeof customer !== 'object') {
+    return { id: String(customer || '') }
+  }
+  return {
+    id: customer._id || '',
+    name: customer.name || '',
+    phone: customer.phone || '',
+    email: customer.email || '',
+    address: customer.address || '',
+    gender: customer.gender || '',
+    dateOfBirth: customer.dateOfBirth || null,
+  }
+}
+
+const getGenderLabel = (gender) => {
+  const normalized = String(gender || '').toLowerCase()
+  if (normalized === 'male') return 'Nam'
+  if (normalized === 'female') return 'Nữ'
+  if (normalized === 'other') return 'Khác'
+  return 'Chưa cập nhật'
+}
+
 const formatMoney = (value) => `${Number(value || 0).toLocaleString('vi-VN')}đ`
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : 'N/A')
 const formatDateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN') : 'N/A')
@@ -102,6 +126,9 @@ export default function StaffRentOrders() {
   const [actionSuccess, setActionSuccess] = useState('')
   const [finalizeMethod, setFinalizeMethod] = useState('Cash')
   const [detailLoading, setDetailLoading] = useState(false)
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
+
+  const customerDetail = useMemo(() => getCustomerDetail(selectedOrder?.customerId), [selectedOrder])
 
   const showError = (msg) => {
     setError(msg)
@@ -835,7 +862,16 @@ export default function StaffRentOrders() {
 
               <div className="mt-5 space-y-5">
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Khách hàng</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Khách hàng</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerModal(true)}
+                      className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
+                    >
+                      Xem chi tiết
+                    </button>
+                  </div>
                   <p className="mt-3 text-base font-semibold text-slate-950">{getCustomerText(selectedOrder.customerId)}</p>
                 </div>
 
@@ -1417,6 +1453,78 @@ export default function StaffRentOrders() {
           )}
         </div>
       </div>
+
+      {/* Customer Detail Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 backdrop-blur-sm px-4 pb-4 sm:items-center sm:pb-0">
+          <div className="w-full max-w-lg overflow-hidden rounded-[28px] bg-white shadow-2xl">
+            <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#eff6ff,#ffffff)] px-6 py-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">Khách hàng</p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950">Thông tin chi tiết</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCustomerModal(false)}
+                  className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3 px-6 py-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Họ và tên</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{customerDetail?.name || 'Chưa cập nhật'}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Số điện thoại</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{customerDetail?.phone || 'Chưa cập nhật'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Email</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{customerDetail?.email || 'Chưa cập nhật'}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Giới tính</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{getGenderLabel(customerDetail?.gender)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Ngày sinh</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    {customerDetail?.dateOfBirth ? formatDate(customerDetail.dateOfBirth) : 'Chưa cập nhật'}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Địa chỉ</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900">{customerDetail?.address || 'Chưa cập nhật'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">Mã khách hàng</p>
+                <p className="mt-1 text-xs font-medium text-slate-700 break-all">{customerDetail?.id || 'Chưa cập nhật'}</p>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setShowCustomerModal(false)}
+                className="h-11 w-full rounded-2xl bg-indigo-600 text-sm font-semibold text-white transition hover:bg-indigo-700"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Collateral Modal */}
       {showCollateralModal && (
