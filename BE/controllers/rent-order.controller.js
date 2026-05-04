@@ -583,7 +583,7 @@ const attachItems = async (orders = []) => {
 
 const fetchOrderDetail = async (orderId) => {
     const order = await RentOrder.findById(orderId)
-        .populate('customerId', 'name phone email')
+        .populate('customerId', 'name phone email address gender dateOfBirth')
         .populate('staffId', 'name phone');
 
     if (!order) return null;
@@ -1454,7 +1454,7 @@ exports.getAllRentOrders = async (req, res) => {
         const skip = (Number(page) - 1) * cappedLimit;
         const [orders, total, distinctStatuses] = await Promise.all([
             RentOrder.find(query)
-                .populate('customerId', 'name phone email')
+                .populate('customerId', 'name phone email address gender dateOfBirth')
                 .populate('staffId', 'name phone')
                 .sort({ createdAt: 1, _id: 1 })
                 .skip(skip)
@@ -2642,9 +2642,6 @@ exports.createGuestRentOrder = async (req, res) => {
             voucherCode = '',
         } = req.body || {};
 
-        if (!verificationToken) {
-            return res.status(400).json({ success: false, message: 'Thiếu token xác minh guest.' });
-        }
         if (!rentStartDate || !rentEndDate || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: 'Vui lòng cung cấp đầy đủ thông tin thuê.' });
         }
@@ -2663,40 +2660,7 @@ exports.createGuestRentOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email không hợp lệ.' });
         }
 
-        // 1) Xác minh token + GuestVerification record.
-        let tokenPayload;
-        try {
-            tokenPayload = verifyGuestVerificationToken(verificationToken);
-        } catch {
-            return res.status(401).json({ success: false, message: 'Token xác minh guest không hợp lệ hoặc đã hết hạn.' });
-        }
-        const verification = await GuestVerification.findById(tokenPayload.verificationId);
-        if (
-            !verification ||
-            !verification.verified ||
-            verification.consumedAt ||
-            verification.method !== tokenPayload.method
-        ) {
-            return res.status(401).json({ success: false, message: 'Phiên xác minh guest không hợp lệ.' });
-        }
-        if (!verification.expiresAt || new Date(verification.expiresAt) <= new Date()) {
-            return res.status(401).json({ success: false, message: 'Phiên xác minh guest đã hết hạn.' });
-        }
-        if (verification.method !== 'email') {
-            return res.status(400).json({
-                success: false,
-                message: 'Đơn thuê chưa đăng nhập chỉ hỗ trợ xác minh bằng email.',
-            });
-        }
-        const verifiedEmail = normalizeEmail(verification.email || normalizedEmail);
-        if (verifiedEmail !== normalizedEmail) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email đặt đơn phải trùng với email đã xác minh.',
-            });
-        }
-
-        // 2) Validate ngày thuê (copy từ createRentOrder để giữ nguyên nghiệp vụ).
+        // 1) Validate ngày thuê (copy từ createRentOrder để giữ nguyên nghiệp vụ).
         const parsedStart = new Date(rentStartDate);
         const parsedEnd = new Date(rentEndDate);
         if (Number.isNaN(parsedStart.getTime()) || Number.isNaN(parsedEnd.getTime())) {
@@ -2735,6 +2699,45 @@ exports.createGuestRentOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Giá thuê không hợp lệ, vui lòng thử lại.' });
         }
 
+        // Kiểm tra khả dụng trước để ưu tiên báo hết size/hết hàng.
+        const resolvedItems = await resolveRentInstances(items, rentStartDate, rentEndDate, null, false);
+
+        // Sau khi chắc chắn còn hàng mới yêu cầu xác minh guest.
+        if (!verificationToken) {
+            return res.status(400).json({ success: false, message: 'Thiếu token xác minh guest.' });
+        }
+        let tokenPayload;
+        try {
+            tokenPayload = verifyGuestVerificationToken(verificationToken);
+        } catch {
+            return res.status(401).json({ success: false, message: 'Token xác minh guest không hợp lệ hoặc đã hết hạn.' });
+        }
+        const verification = await GuestVerification.findById(tokenPayload.verificationId);
+        if (
+            !verification ||
+            !verification.verified ||
+            verification.consumedAt ||
+            verification.method !== tokenPayload.method
+        ) {
+            return res.status(401).json({ success: false, message: 'Phiên xác minh guest không hợp lệ.' });
+        }
+        if (!verification.expiresAt || new Date(verification.expiresAt) <= new Date()) {
+            return res.status(401).json({ success: false, message: 'Phiên xác minh guest đã hết hạn.' });
+        }
+        if (verification.method !== 'email') {
+            return res.status(400).json({
+                success: false,
+                message: 'Đơn thuê chưa đăng nhập chỉ hỗ trợ xác minh bằng email.',
+            });
+        }
+        const verifiedEmail = normalizeEmail(verification.email || normalizedEmail);
+        if (verifiedEmail !== normalizedEmail) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email đặt đơn phải trùng với email đã xác minh.',
+            });
+        }
+
         // 3) Tìm/tạo User walk_in gắn với email đã verify.
         const guestUser = await findOrCreateGuestCustomer({
             email: verifiedEmail,
@@ -2744,8 +2747,6 @@ exports.createGuestRentOrder = async (req, res) => {
 
         ({ session, useTransaction } = await startTransactionIfAvailable());
         txOptions = useTransaction ? { session } : {};
-
-        const resolvedItems = await resolveRentInstances(items, rentStartDate, rentEndDate, session, useTransaction);
 
         const computedTotalAmount = resolvedItems.reduce(
             (sum, item) => sum + Number(item.source.finalPrice || item.source.baseRentPrice || item.instance.currentRentPrice || 0),

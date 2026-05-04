@@ -886,10 +886,6 @@ exports.guestCheckout = async (req, res) => {
     idempotencyKey = normalizeIdempotencyKey(req);
     const role = '';
 
-    if (!verificationToken) {
-      return res.status(400).json({ success: false, message: 'Thiếu token xác minh guest.' });
-    }
-
     const existingOrder = await findSaleOrderByIdempotencyKey(idempotencyKey);
     if (existingOrder) {
       if (existingOrder.voucherId || existingOrder.voucherCode) {
@@ -899,6 +895,57 @@ exports.guestCheckout = async (req, res) => {
         });
       }
       return res.status(200).json(buildCheckoutSuccessResponse(existingOrder));
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Giỏ hàng mua đang trống.' });
+    }
+
+    let activeShift = null;
+    if (role === 'staff') {
+      activeShift = await getActiveShiftForStaff(customerId);
+      if (!activeShift?.shift) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn phải đang trong ca làm (đã check-in và chưa check-out) để tạo đơn.',
+        });
+      }
+    }
+
+    const normalizedName = String(name || '').trim();
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedAddress = String(address || '').trim();
+
+    if (!normalizedName || !normalizedAddress || !normalizedEmail) {
+      return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ tên, email và địa chỉ nhận hàng.' });
+    }
+
+    if (!isValidPhone(normalizedPhone)) {
+      return res.status(400).json({ success: false, message: 'Số điện thoại nhận hàng không hợp lệ.' });
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'Email nhận hàng không hợp lệ.' });
+    }
+
+    // CHANGED: use unique product ids to avoid false invalid-product errors for same product with different conditions.
+    const uniqueProductIds = getUniqueProductIds(items);
+    const products = await Product.find({ _id: { $in: uniqueProductIds }, isDraft: { $ne: true } }).lean();
+    const productMap = new Map(products.map((product) => [String(product._id), product]));
+
+    if (productMap.size !== uniqueProductIds.length) {
+      return res.status(400).json({ success: false, message: 'Có sản phẩm không hợp lệ hoặc đã ngừng bán.' });
+    }
+
+    const normalizedItems = buildNormalizedSaleItems(items, productMap);
+    await ensureSaleStockAvailable(normalizedItems);
+
+    const subtotal = normalizedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+
+    // Chỉ yêu cầu xác minh sau khi đã kiểm tra hàng khả dụng.
+    if (!verificationToken) {
+      return res.status(400).json({ success: false, message: 'Thiếu token xác minh guest.' });
     }
 
     let tokenPayload;
@@ -944,38 +991,6 @@ exports.guestCheckout = async (req, res) => {
       });
     }
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Giỏ hàng mua đang trống.' });
-    }
-
-    let activeShift = null;
-    if (role === 'staff') {
-      activeShift = await getActiveShiftForStaff(customerId);
-      if (!activeShift?.shift) {
-        return res.status(403).json({
-          success: false,
-          message: 'Bạn phải đang trong ca làm (đã check-in và chưa check-out) để tạo đơn.',
-        });
-      }
-    }
-
-    const normalizedName = String(name || '').trim();
-    const normalizedPhone = normalizePhone(phone);
-    const normalizedEmail = normalizeEmail(email);
-    const normalizedAddress = String(address || '').trim();
-
-    if (!normalizedName || !normalizedAddress || !normalizedEmail) {
-      return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ tên, email và địa chỉ nhận hàng.' });
-    }
-
-    if (!isValidPhone(normalizedPhone)) {
-      return res.status(400).json({ success: false, message: 'Số điện thoại nhận hàng không hợp lệ.' });
-    }
-
-    if (!isValidEmail(normalizedEmail)) {
-      return res.status(400).json({ success: false, message: 'Email nhận hàng không hợp lệ.' });
-    }
-
     const verifiedEmail = normalizeEmail(verification.email || normalizedEmail);
     if (!isValidEmail(verifiedEmail)) {
       return res.status(400).json({ success: false, message: 'Email xác minh không hợp lệ.' });
@@ -987,20 +1002,6 @@ exports.guestCheckout = async (req, res) => {
         message: 'Email thanh toán phải trùng với email đã xác minh.',
       });
     }
-
-    // CHANGED: use unique product ids to avoid false invalid-product errors for same product with different conditions.
-    const uniqueProductIds = getUniqueProductIds(items);
-    const products = await Product.find({ _id: { $in: uniqueProductIds }, isDraft: { $ne: true } }).lean();
-    const productMap = new Map(products.map((product) => [String(product._id), product]));
-
-    if (productMap.size !== uniqueProductIds.length) {
-      return res.status(400).json({ success: false, message: 'Có sản phẩm không hợp lệ hoặc đã ngừng bán.' });
-    }
-
-    const normalizedItems = buildNormalizedSaleItems(items, productMap);
-    await ensureSaleStockAvailable(normalizedItems);
-
-    const subtotal = normalizedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
     // If a voucher is used in guest flow, attach a stable guest user id so per-user limits can be enforced.
     const normalizedVoucherCode = normalizeVoucherCode(voucherCode);
@@ -1087,7 +1088,10 @@ exports.guestCheckout = async (req, res) => {
       }
     }
 
-    console.error('Guest checkout error:', error);
+    const isClientInputError = error.message === 'INVALID_PRODUCT_DATA' || error.message === 'OUT_OF_STOCK';
+    if (!isClientInputError) {
+      console.error('Guest checkout error:', error);
+    }
     const message = error.message === 'INVALID_PRODUCT_DATA'
       ? 'Không thể xác thực dữ liệu sản phẩm trong giỏ hàng.'
       : error.message === 'OUT_OF_STOCK'
