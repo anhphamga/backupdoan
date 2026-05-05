@@ -13,6 +13,7 @@ import {
   registerShiftSchedule,
   rejectShiftRegistration,
   undoCheckoutShiftRegistration,
+  updateShiftSchedule,
 } from '../api/shiftScheduleApi'
 import { clearStoredActiveShift, setStoredActiveShiftId } from '../utils/shift.utils'
 
@@ -61,10 +62,13 @@ export const useShiftSchedules = (options = {}) => {
     })
   }, [])
 
-  const fetchShifts = useCallback(async (dateValue = selectedDate) => {
+  const fetchShifts = useCallback(async (dateValue = selectedDate, fetchOptions = {}) => {
+    const silent = Boolean(fetchOptions?.silent)
     try {
-      setLoading(true)
-      setError('')
+      if (!silent) {
+        setLoading(true)
+        setError('')
+      }
       const response = await getShiftSchedules({ date: dateValue, limit: 200, page: 1 })
       const payload = response?.data
       const items = payload?.data?.items || payload?.data?.data?.items || payload?.data?.items || payload?.items
@@ -77,20 +81,23 @@ export const useShiftSchedules = (options = {}) => {
             : Array.isArray(items)
               ? items
               : []
-      if (!mountedRef.current) return
-      setShifts(resolvedItems)
+      if (!mountedRef.current) return resolvedItems
+      if (!silent) setShifts(resolvedItems)
       return resolvedItems
     } catch (apiError) {
       if (!mountedRef.current) return []
-      setError(extractApiMessage(apiError, 'Không thể tải danh sách ca làm.'))
-      setShifts([])
+      if (!silent) {
+        setError(extractApiMessage(apiError, 'Không thể tải danh sách ca làm.'))
+        setShifts([])
+      }
       return []
     } finally {
-      if (mountedRef.current) setLoading(false)
+      if (mountedRef.current && !silent) setLoading(false)
     }
   }, [selectedDate])
 
-  const fetchMyRegistrations = useCallback(async (dateValue = selectedDate) => {
+  const fetchMyRegistrations = useCallback(async (dateValue = selectedDate, fetchOptions = {}) => {
+    const silent = Boolean(fetchOptions?.silent)
     if (role !== 'staff') {
       setMyRegistrations([])
       return []
@@ -101,12 +108,12 @@ export const useShiftSchedules = (options = {}) => {
       const payload = response?.data
       const items = payload?.data?.items || payload?.data?.data?.items || payload?.data || []
       const resolvedItems = Array.isArray(items) ? items : (Array.isArray(payload?.data?.items) ? payload.data.items : [])
-      if (!mountedRef.current) return []
-      setMyRegistrations(resolvedItems)
+      if (!mountedRef.current) return resolvedItems
+      if (!silent) setMyRegistrations(resolvedItems)
       return resolvedItems
     } catch {
       if (!mountedRef.current) return []
-      setMyRegistrations([])
+      if (!silent) setMyRegistrations([])
       return []
     }
   }, [role, selectedDate])
@@ -127,7 +134,7 @@ export const useShiftSchedules = (options = {}) => {
       return resolvedItems
     } catch (apiError) {
       if (!mountedRef.current) return []
-      setError(extractApiMessage(apiError, 'Không thể tải danh sách đăng ký.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ táº£i danh sÃ¡ch Ä‘Äƒng kÃ½.'))
       return []
     } finally {
       if (mountedRef.current) setActionLoading(key, false)
@@ -192,7 +199,7 @@ export const useShiftSchedules = (options = {}) => {
       await refresh()
       return response?.data
     } catch (apiError) {
-      setError(extractApiMessage(apiError, 'Không thể tạo ca làm.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ táº¡o ca lÃ m.'))
       throw apiError
     } finally {
       setActionLoading(key, false)
@@ -209,7 +216,7 @@ export const useShiftSchedules = (options = {}) => {
       await fetchShifts(selectedDate)
       return response?.data
     } catch (apiError) {
-      setError(extractApiMessage(apiError, 'Không thể đăng ký ca làm.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ Ä‘Äƒng kÃ½ ca lÃ m.'))
       throw apiError
     } finally {
       setActionLoading(key, false)
@@ -226,7 +233,7 @@ export const useShiftSchedules = (options = {}) => {
       if (shiftId) await fetchRegistrationsForShift(shiftId)
       return response?.data
     } catch (apiError) {
-      setError(extractApiMessage(apiError, 'Không thể duyệt đăng ký.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ duyá»‡t Ä‘Äƒng kÃ½.'))
       throw apiError
     } finally {
       setActionLoading(key, false)
@@ -243,7 +250,7 @@ export const useShiftSchedules = (options = {}) => {
       if (shiftId) await fetchRegistrationsForShift(shiftId)
       return response?.data
     } catch (apiError) {
-      setError(extractApiMessage(apiError, 'Không thể từ chối đăng ký.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ tá»« chá»‘i Ä‘Äƒng kÃ½.'))
       throw apiError
     } finally {
       setActionLoading(key, false)
@@ -261,7 +268,7 @@ export const useShiftSchedules = (options = {}) => {
       setStoredActiveShiftId(shiftId)
       return response?.data
     } catch (apiError) {
-      setError(extractApiMessage(apiError, 'Không thể check-in.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ check-in.'))
       throw apiError
     } finally {
       setActionLoading(key, false)
@@ -279,7 +286,7 @@ export const useShiftSchedules = (options = {}) => {
       await fetchCurrentShift()
       return response?.data
     } catch (apiError) {
-      setError(extractApiMessage(apiError, 'Không thể check-out.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ check-out.'))
       throw apiError
     } finally {
       setActionLoading(key, false)
@@ -297,7 +304,7 @@ export const useShiftSchedules = (options = {}) => {
       setStoredActiveShiftId(shiftId)
       return response?.data
     } catch (apiError) {
-      setError(extractApiMessage(apiError, 'Không thể hoàn tác check-out.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ hoÃ n tÃ¡c check-out.'))
       throw apiError
     } finally {
       setActionLoading(key, false)
@@ -313,7 +320,23 @@ export const useShiftSchedules = (options = {}) => {
       await fetchShifts(selectedDate)
       return response?.data
     } catch (apiError) {
-      setError(extractApiMessage(apiError, 'Không thể đóng ca.'))
+      setError(extractApiMessage(apiError, 'KhÃ´ng thá»ƒ Ä‘Ã³ng ca.'))
+      throw apiError
+    } finally {
+      setActionLoading(key, false)
+    }
+  }, [fetchShifts, selectedDate, setActionLoading])
+
+  const updateShift = useCallback(async (shiftId, payload = {}) => {
+    const key = `update:${shiftId}`
+    try {
+      setActionLoading(key, true)
+      setError('')
+      const response = await updateShiftSchedule(shiftId, payload)
+      await fetchShifts(selectedDate)
+      return response?.data
+    } catch (apiError) {
+      setError(extractApiMessage(apiError, 'Không thể cập nhật ca làm.'))
       throw apiError
     } finally {
       setActionLoading(key, false)
@@ -330,6 +353,7 @@ export const useShiftSchedules = (options = {}) => {
     actionLoadingMap,
     refresh,
     fetchShifts,
+    fetchMyRegistrations,
     currentShift,
     fetchCurrentShift,
     createShift,
@@ -340,6 +364,7 @@ export const useShiftSchedules = (options = {}) => {
     checkOut,
     undoCheckOut,
     closeShift,
+    updateShift,
     myRegistrations,
     myRegistrationByShiftId,
     registrationsByShiftId,

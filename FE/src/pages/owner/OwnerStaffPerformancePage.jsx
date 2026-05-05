@@ -18,6 +18,15 @@ const formatNumber = (value) => {
   return new Intl.NumberFormat('vi-VN').format(Math.round(value || 0))
 }
 
+const formatHoursMinutes = (hoursValue) => {
+  const raw = Number(hoursValue || 0)
+  if (!Number.isFinite(raw) || raw <= 0) return '0:00'
+  const totalMinutes = Math.max(0, Math.round(raw * 60))
+  const hh = Math.floor(totalMinutes / 60)
+  const mm = totalMinutes % 60
+  return `${hh}:${String(mm).padStart(2, '0')}`
+}
+
 const getDateRange = () => {
   const today = new Date()
   const endDate = today.toISOString().split('T')[0]
@@ -46,6 +55,21 @@ export default function OwnerStaffPerformancePage() {
     endDate: dateRange.endDate,
     threshold: KPI_THRESHOLD,
   })
+
+  const meta = useMemo(() => {
+    const rows = Array.isArray(data) ? data : []
+    const hasAnyShift = rows.some((r) => Number(r?.totalShifts || 0) > 0)
+    const hasAnyHours = rows.some((r) => Number(r?.totalHours || 0) > 0)
+    const inProgressCount = rows.filter(
+      (r) => Number(r?.totalShifts || 0) > 0 && Number(r?.totalHours || 0) <= 0,
+    ).length
+    return {
+      hasAnyShift,
+      hasAnyHours,
+      inProgressCount,
+      hasInProgress: inProgressCount > 0,
+    }
+  }, [data])
 
   const handleDateChange = (e) => {
     const { name, value } = e.target
@@ -118,7 +142,7 @@ export default function OwnerStaffPerformancePage() {
   }
 
   // KPI Cards
-  const KpiCard = ({ title, value, subtitle, icon: Icon }) => (
+  const KpiCard = ({ title, value, subtitle, icon: Icon, badge }) => (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between">
         <div className="flex-1">
@@ -129,6 +153,7 @@ export default function OwnerStaffPerformancePage() {
           {subtitle && (
             <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
           )}
+          {badge ? <div className="mt-2">{badge}</div> : null}
         </div>
         {Icon && (
           <div className="ml-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
@@ -214,17 +239,31 @@ export default function OwnerStaffPerformancePage() {
         />
         <KpiCard
           title="Tổng giờ làm"
-          value={formatNumber(kpis.totalHours)}
-          subtitle="Giờ"
+          value={meta.hasInProgress && Number(kpis.totalHours || 0) <= 0 ? '—' : formatHoursMinutes(kpis.totalHours)}
+          subtitle="Chỉ tính giờ khi đã check-out"
           icon={Calendar}
+          badge={meta.hasInProgress ? (
+            <span
+              className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800"
+              title="Chỉ tính giờ khi đã check-out"
+            >
+              Có {meta.inProgressCount} nhân sự đang làm
+            </span>
+          ) : null}
         />
         <KpiCard
           title="TB / giờ"
-          value={formatCurrency(kpis.avgRevenuePerHour)}
+          value={meta.hasInProgress && Number(kpis.totalHours || 0) <= 0 ? '—' : formatCurrency(kpis.avgRevenuePerHour)}
           subtitle="Doanh thu trung bình"
           icon={null}
         />
       </div>
+
+      {meta.hasInProgress ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Có nhân sự đã check-in nhưng chưa check-out. Giờ làm và TB/giờ chỉ được tính khi đã check-out.
+        </div>
+      ) : null}
 
       {/* Main Table */}
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -240,7 +279,10 @@ export default function OwnerStaffPerformancePage() {
               <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600">
                 Số ca
               </th>
-              <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600">
+              <th
+                className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600"
+                title="Chỉ tính giờ khi đã check-out"
+              >
                 Giờ làm
               </th>
               <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600">
@@ -252,7 +294,10 @@ export default function OwnerStaffPerformancePage() {
               <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600">
                 TB / ca
               </th>
-              <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600">
+              <th
+                className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600"
+                title="Chỉ tính giờ khi đã check-out"
+              >
                 TB / giờ
               </th>
               <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">
@@ -274,52 +319,74 @@ export default function OwnerStaffPerformancePage() {
                 </td>
               </tr>
             ) : (
-              data.map((staff) => (
-                <tr key={staff.staffId} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 text-center text-lg font-bold text-slate-900">
-                    {staff.rankMedal || `${staff.rank}`}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                    <button
-                      type="button"
-                      className="text-left font-semibold text-blue-700 hover:text-blue-800 hover:underline"
-                      onClick={() => loadStaffOrders({ staffId: staff.staffId, staffName: staff.staffName, page: 1 })}
-                      title="Xem đơn hàng nhân viên đã xử lí"
-                    >
-                      {staff.staffName}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-700">
-                    {formatNumber(staff.totalShifts)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-700">
-                    {staff.totalHours.toFixed(1)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-700">
-                    {formatNumber(staff.totalOrders)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">
-                    {formatCurrency(staff.totalRevenue)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-700">
-                    {formatCurrency(staff.avgRevenuePerShift)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-700">
-                    {formatCurrency(staff.avgRevenuePerHour)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-block rounded-full px-2 py-1 text-xs font-medium ${
-                        staff.avgRevenuePerHour > KPI_THRESHOLD
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {staff.performanceLevel}
-                    </span>
-                  </td>
-                </tr>
-              ))
+              data.map((staff) => {
+                const shifts = Number(staff.totalShifts || 0)
+                const hours = Number(staff.totalHours || 0)
+                const inProgress = shifts > 0 && hours <= 0
+
+                const statusBadge = shifts <= 0 ? (
+                  <span className="inline-block rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                    Không có dữ liệu
+                  </span>
+                ) : inProgress ? (
+                  <span
+                    className="inline-block rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800"
+                    title="Chỉ tính giờ khi đã check-out"
+                  >
+                    Đang làm
+                  </span>
+                ) : (
+                  <span
+                    className={`inline-block rounded-full px-2 py-1 text-xs font-medium ${
+                      staff.avgRevenuePerHour > KPI_THRESHOLD
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                    title="Đã check-out"
+                  >
+                    {staff.performanceLevel}
+                  </span>
+                )
+
+                return (
+                  <tr key={staff.staffId} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-center text-lg font-bold text-slate-900">
+                      {staff.rankMedal || `${staff.rank}`}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                      <button
+                        type="button"
+                        className="text-left font-semibold text-blue-700 hover:text-blue-800 hover:underline"
+                        onClick={() => loadStaffOrders({ staffId: staff.staffId, staffName: staff.staffName, page: 1 })}
+                        title="Xem đơn hàng nhân viên đã xử lí"
+                      >
+                        {staff.staffName}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-700">
+                      {formatNumber(staff.totalShifts)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-700">
+                      {shifts <= 0 ? '—' : inProgress ? '—' : formatHoursMinutes(staff.totalHours)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-700">
+                      {formatNumber(staff.totalOrders)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">
+                      {formatCurrency(staff.totalRevenue)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-700">
+                      {shifts <= 0 ? '—' : formatCurrency(staff.avgRevenuePerShift)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-slate-700">
+                      {shifts <= 0 ? '—' : inProgress ? '—' : formatCurrency(staff.avgRevenuePerHour)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {statusBadge}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>

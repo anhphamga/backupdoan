@@ -1,13 +1,23 @@
 import React, { useMemo, useState } from 'react'
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
+const MAX_REQUIRED_STAFF = Math.max(Number(import.meta.env.VITE_SHIFT_MAX_REQUIRED_STAFF || 20), 1)
+const toMinutes = (timeText) => {
+  const text = String(timeText || '').trim()
+  const m = /^(\d{2}):(\d{2})$/.exec(text)
+  if (!m) return null
+  const hh = Number(m[1])
+  const mm = Number(m[2])
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
+  return hh * 60 + mm
+}
 
 const toInt = (value) => {
   const n = Number(value)
   return Number.isFinite(n) ? n : NaN
 }
 
-export default function ShiftCreateForm({ onSubmit, loading, errorMessage = '' }) {
+export default function ShiftCreateForm({ onSubmit, loading, errorMessage = '', initialDate = '' }) {
   const today = useMemo(() => {
     const now = new Date()
     const y = now.getFullYear()
@@ -17,7 +27,7 @@ export default function ShiftCreateForm({ onSubmit, loading, errorMessage = '' }
   }, [])
 
   const [form, setForm] = useState({
-    date: today,
+    date: initialDate || today,
     startTime: '08:00',
     endTime: '12:00',
     requiredStaff: 1,
@@ -26,11 +36,22 @@ export default function ShiftCreateForm({ onSubmit, loading, errorMessage = '' }
 
   const validate = () => {
     if (!form.date) return 'Vui lòng chọn ngày.'
-    if (!TIME_REGEX.test(String(form.startTime || ''))) return 'startTime phải đúng định dạng HH:mm.'
-    if (!TIME_REGEX.test(String(form.endTime || ''))) return 'endTime phải đúng định dạng HH:mm.'
+    const selected = new Date(`${form.date}T00:00:00`)
+    const nowDay = new Date()
+    nowDay.setHours(0, 0, 0, 0)
+    if (!Number.isNaN(selected.getTime()) && selected.getTime() < nowDay.getTime()) return 'Không thể tạo ca làm trong quá khứ.'
+    if (!TIME_REGEX.test(String(form.startTime || ''))) return 'Giờ bắt đầu phải đúng định dạng HH:mm.'
+    if (!TIME_REGEX.test(String(form.endTime || ''))) return 'Giờ kết thúc phải đúng định dạng HH:mm.'
     if (String(form.startTime) >= String(form.endTime)) return 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc.'
+    if (!Number.isNaN(selected.getTime()) && selected.getTime() === nowDay.getTime()) {
+      const startMinutes = toMinutes(form.startTime)
+      const now = new Date()
+      const nowMinutes = now.getHours() * 60 + now.getMinutes()
+      if (startMinutes != null && startMinutes <= nowMinutes) return 'Không thể tạo ca làm đã bắt đầu trong hôm nay.'
+    }
     const required = toInt(form.requiredStaff)
-    if (!Number.isInteger(required) || required < 1) return 'requiredStaff phải là số nguyên >= 1.'
+    if (!Number.isInteger(required) || required < 1) return 'Số nhân sự phải là số nguyên ≥ 1.'
+    if (required > MAX_REQUIRED_STAFF) return `Số nhân sự tối đa cho một ca là ${MAX_REQUIRED_STAFF}.`
     return ''
   }
 
@@ -120,4 +141,3 @@ export default function ShiftCreateForm({ onSubmit, loading, errorMessage = '' }
     </form>
   )
 }
-

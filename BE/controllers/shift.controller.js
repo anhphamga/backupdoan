@@ -7,6 +7,9 @@ const { SHIFT_STATUS } = Shift;
 const { SHIFT_REGISTRATION_STATUS } = ShiftRegistration;
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+const SHIFT_MAX_REQUIRED_STAFF = Math.max(Number(process.env.SHIFT_MAX_REQUIRED_STAFF || 20), 1);
+const CHECKIN_EARLY_MINUTES = Math.max(Number(process.env.SHIFT_CHECKIN_EARLY_MINUTES || 15), 0);
+const CHECKOUT_EARLY_MINUTES = Math.max(Number(process.env.SHIFT_CHECKOUT_EARLY_MINUTES || 30), 0);
 
 const parseTimeToMinutes = (timeText) => {
   const text = String(timeText || '').trim();
@@ -38,17 +41,32 @@ const isOverlap = (startA, endA, startB, endB) => {
   return startA < endB && startB < endA;
 };
 
+const buildDateTimeFromShift = (shiftDate, timeText) => {
+  const minutes = parseTimeToMinutes(timeText);
+  if (minutes === null) return null;
+  const at = new Date(shiftDate);
+  at.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return Number.isNaN(at.getTime()) ? null : at;
+};
+
 const normalizeRole = (role) => String(role || '').trim().toLowerCase();
 
 const createShift = async (req, res) => {
   try {
     const { date, startTime, endTime, requiredStaff } = req.body || {};
 
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn ngày.',
+      });
+    }
+
     const shiftDate = normalizeShiftDate(date);
     if (!shiftDate) {
       return res.status(400).json({
         success: false,
-        message: 'date không hợp lệ (ví dụ: 2026-04-23).',
+        message: 'Ngày không hợp lệ (ví dụ: 2026-04-23).',
       });
     }
 
@@ -57,14 +75,14 @@ const createShift = async (req, res) => {
     if (startMinutes === null || endMinutes === null) {
       return res.status(400).json({
         success: false,
-        message: 'startTime/endTime phải đúng định dạng HH:mm (ví dụ: 08:30).',
+        message: 'Giờ bắt đầu/giờ kết thúc phải đúng định dạng HH:mm (ví dụ: 08:30).',
       });
     }
 
     if (startMinutes >= endMinutes) {
       return res.status(400).json({
         success: false,
-        message: 'startTime phải nhỏ hơn endTime.',
+        message: 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc.',
       });
     }
 
@@ -72,11 +90,17 @@ const createShift = async (req, res) => {
     if (!Number.isInteger(normalizedRequiredStaff) || normalizedRequiredStaff < 1) {
       return res.status(400).json({
         success: false,
-        message: 'requiredStaff phải là số nguyên và >= 1.',
+        message: 'Số lượng nhân sự phải là số nguyên và >= 1.',
       });
     }
 
-    // Optional: prevent creating shifts in the past (server local time)
+    if (normalizedRequiredStaff > SHIFT_MAX_REQUIRED_STAFF) {
+      return res.status(400).json({
+        success: false,
+        message: `Số lượng nhân sự tối đa cho một ca là ${SHIFT_MAX_REQUIRED_STAFF}.`,
+      });
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (shiftDate.getTime() < today.getTime()) {
@@ -88,12 +112,37 @@ const createShift = async (req, res) => {
     if (shiftDate.getTime() === today.getTime()) {
       const now = new Date();
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      if (startMinutes <= nowMinutes) {
+        return res.status(400).json({
+          success: false,
+          message: 'Không thể tạo ca làm đã bắt đầu trong hôm nay.',
+        });
+      }
       if (endMinutes <= nowMinutes) {
         return res.status(400).json({
           success: false,
           message: 'Không thể tạo ca làm đã kết thúc trong hôm nay.',
         });
       }
+    }
+    // Không cho tạo ca trùng/đè thời gian trong cùng ngày
+    const { start, end } = getDayRange(shiftDate);
+    const existingShifts = await Shift.find({
+      date: { $gte: start, $lt: end },
+    }).select('startTime endTime');
+
+    const hasOverlap = existingShifts.some((other) => {
+      const otherStart = parseTimeToMinutes(other.startTime);
+      const otherEnd = parseTimeToMinutes(other.endTime);
+      if (otherStart === null || otherEnd === null) return false;
+      return isOverlap(startMinutes, endMinutes, otherStart, otherEnd);
+    });
+
+    if (hasOverlap) {
+      return res.status(409).json({
+        success: false,
+        message: 'Thời gian ca bị trùng với ca khác trong cùng ngày.',
+      });
     }
 
     const created = await Shift.create({
@@ -115,7 +164,7 @@ const createShift = async (req, res) => {
     if (duplicate) {
       return res.status(409).json({
         success: false,
-        message: 'Ca làm đã tồn tại (trùng date/startTime/endTime).',
+        message: 'Ca làm đã tồn tại (trùng ngày/giờ bắt đầu/giờ kết thúc).',
       });
     }
 
@@ -126,7 +175,6 @@ const createShift = async (req, res) => {
     });
   }
 };
-
 const getShifts = async (req, res) => {
   try {
     const { date } = req.query || {};
@@ -241,37 +289,6 @@ const registerShift = async (req, res) => {
       });
     }
 
-    const { start, end } = getDayRange(shift.date);
-    const otherShiftIds = await ShiftRegistration
-      .find({
-        staffId,
-        status: { $in: [SHIFT_REGISTRATION_STATUS.PENDING, SHIFT_REGISTRATION_STATUS.APPROVED] },
-        shiftId: { $ne: shift._id },
-      })
-      .distinct('shiftId');
-
-    if (otherShiftIds.length > 0) {
-      const sameDayShifts = await Shift.find({
-        _id: { $in: otherShiftIds },
-        date: { $gte: start, $lt: end },
-        status: { $ne: SHIFT_STATUS.CLOSED },
-      }).select('startTime endTime');
-
-      const hasOverlap = sameDayShifts.some((other) => {
-        const otherStart = parseTimeToMinutes(other.startTime);
-        const otherEnd = parseTimeToMinutes(other.endTime);
-        if (otherStart === null || otherEnd === null) return false;
-        return isOverlap(targetStart, targetEnd, otherStart, otherEnd);
-      });
-
-      if (hasOverlap) {
-        return res.status(400).json({
-          success: false,
-          message: 'Bạn không thể đăng ký ca bị trùng giờ với ca khác trong cùng ngày.',
-        });
-      }
-    }
-
     const created = await ShiftRegistration.create({
       shiftId: shift._id,
       staffId,
@@ -358,6 +375,38 @@ const approveShiftRegistration = async (req, res) => {
         const freshRegistration = await ShiftRegistration.findById(registration._id).session(session);
         const freshShift = await Shift.findById(shift._id).session(session);
         return { registration: freshRegistration, shift: freshShift };
+      }
+      // Không duyệt nếu nhân viên có ca khác bị trùng giờ
+      const targetStart = parseTimeToMinutes(shift.startTime);
+      const targetEnd = parseTimeToMinutes(shift.endTime);
+      if (targetStart === null || targetEnd === null) {
+        throw buildError(500, 'Dữ liệu thời gian ca làm không hợp lệ.');
+      }
+
+      const { start, end } = getDayRange(shift.date);
+      const approvedShiftIds = await ShiftRegistration.find({
+        staffId: registration.staffId,
+        status: SHIFT_REGISTRATION_STATUS.APPROVED,
+        shiftId: { $ne: shift._id },
+      }).distinct('shiftId').session(session);
+
+      if (approvedShiftIds.length > 0) {
+        const sameDayApprovedShifts = await Shift.find({
+          _id: { $in: approvedShiftIds },
+          date: { $gte: start, $lt: end },
+          status: { $ne: SHIFT_STATUS.CLOSED },
+        }).select('startTime endTime').session(session);
+
+        const hasOverlap = sameDayApprovedShifts.some((other) => {
+          const otherStart = parseTimeToMinutes(other.startTime);
+          const otherEnd = parseTimeToMinutes(other.endTime);
+          if (otherStart === null || otherEnd === null) return false;
+          return isOverlap(targetStart, targetEnd, otherStart, otherEnd);
+        });
+
+        if (hasOverlap) {
+          throw buildError(400, 'Nhân viên đã có ca khác trùng giờ, không thể duyệt.');
+        }
       }
 
       // APPROVED: capacity-safe atomic add (prevents over-assign in concurrency)
@@ -550,6 +599,17 @@ const checkIn = async (req, res) => {
       });
     }
 
+    const shiftStartAt = buildDateTimeFromShift(shift.date, shift.startTime);
+    if (shiftStartAt) {
+      const earliest = shiftStartAt.getTime() - CHECKIN_EARLY_MINUTES * 60 * 1000;
+      if (Date.now() < earliest) {
+        return res.status(400).json({
+          success: false,
+          message: `Bạn chỉ có thể check-in trước tối đa ${CHECKIN_EARLY_MINUTES} phút.`,
+        });
+      }
+    }
+
     const endMinutes = parseTimeToMinutes(shift.endTime);
     if (endMinutes !== null) {
       const endAt = new Date(shift.date);
@@ -561,8 +621,7 @@ const checkIn = async (req, res) => {
         });
       }
     }
-
-    if (registration.checkInAt) {
+if (registration.checkInAt) {
       return res.status(400).json({
         success: false,
         message: 'Bạn đã check-in ca này rồi.',
@@ -829,29 +888,78 @@ const closeShift = async (req, res) => {
       });
     }
 
-    const shift = await Shift.findById(shiftId);
-    if (!shift) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy ca làm.',
-      });
-    }
+    let resultShift;
+    let session;
+    try {
+      session = await mongoose.startSession();
+      await session.withTransaction(async () => {
+        const shift = await Shift.findById(shiftId).session(session);
+        if (!shift) {
+          const e = new Error('Không tìm thấy ca làm.');
+          e.httpCode = 404;
+          throw e;
+        }
 
-    if (shift.status === SHIFT_STATUS.CLOSED) {
-      return res.json({
-        success: true,
-        message: 'Ca làm đã đóng.',
-        data: shift,
-      });
-    }
+        if (shift.status !== SHIFT_STATUS.CLOSED) {
+          shift.status = SHIFT_STATUS.CLOSED;
+          await shift.save({ session });
+        }
 
-    shift.status = SHIFT_STATUS.CLOSED;
-    await shift.save();
+        // Idempotent: dù ca đã đóng từ trước vẫn ghi nhận check-out cho nhân viên đã check-in nhưng chưa check-out
+        await ShiftRegistration.updateMany(
+          {
+            shiftId: shift._id,
+            status: SHIFT_REGISTRATION_STATUS.APPROVED,
+            checkInAt: { $ne: null },
+            checkOutAt: null,
+          },
+          { $set: { checkOutAt: new Date() } },
+          { session }
+        );
+
+        resultShift = shift;
+      });
+    } catch (error) {
+      const message = String(error?.message || '');
+      const isTxnUnsupported = message.includes('Transaction') || message.includes('replica set') || message.includes('mongos');
+      if (!isTxnUnsupported) {
+        const httpCode = Number(error?.httpCode || 0);
+        if (httpCode) {
+          return res.status(httpCode).json({ success: false, message: error.message });
+        }
+        throw error;
+      }
+
+      // Fallback cho MongoDB standalone
+      const shift = await Shift.findById(shiftId);
+      if (!shift) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy ca làm.' });
+      }
+
+      if (shift.status !== SHIFT_STATUS.CLOSED) {
+        shift.status = SHIFT_STATUS.CLOSED;
+        await shift.save();
+      }
+
+      await ShiftRegistration.updateMany(
+        {
+          shiftId: shift._id,
+          status: SHIFT_REGISTRATION_STATUS.APPROVED,
+          checkInAt: { $ne: null },
+          checkOutAt: null,
+        },
+        { $set: { checkOutAt: new Date() } }
+      );
+
+      resultShift = shift;
+    } finally {
+      if (session) session.endSession();
+    }
 
     return res.json({
       success: true,
       message: 'Đóng ca thành công.',
-      data: shift,
+      data: resultShift,
     });
   } catch (error) {
     console.error('Close shift error:', error);
@@ -861,7 +969,6 @@ const closeShift = async (req, res) => {
     });
   }
 };
-
 const getCurrentShift = async (req, res) => {
   try {
     const staffId = req.user?.id;
@@ -904,6 +1011,123 @@ const getCurrentShift = async (req, res) => {
   }
 };
 
+const updateShift = async (req, res) => {
+  try {
+    const shiftId = String(req.params?.id || '').trim();
+    const { requiredStaff } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(shiftId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'id không hợp lệ.',
+      });
+    }
+
+    const nextRequiredStaff = Number(requiredStaff);
+    if (!Number.isInteger(nextRequiredStaff) || nextRequiredStaff < 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Số lượng nhân sự phải là số nguyên và > 0.',
+      });
+    }
+
+    let resultShift;
+    let session;
+    try {
+      session = await mongoose.startSession();
+      await session.withTransaction(async () => {
+        const shift = await Shift.findById(shiftId).session(session);
+        if (!shift) {
+          const e = new Error('Không tìm thấy ca làm.');
+          e.httpCode = 404;
+          throw e;
+        }
+
+        if (shift.status === SHIFT_STATUS.CLOSED) {
+          const e = new Error('Ca làm đã đóng, không thể cập nhật số nhân sự.');
+          e.httpCode = 400;
+          throw e;
+        }
+
+        const shiftStartAt = buildDateTimeFromShift(shift.date, shift.startTime);
+        if (shiftStartAt && Date.now() >= shiftStartAt.getTime()) {
+          const e = new Error('Ca làm đã bắt đầu, không thể cập nhật số nhân sự.');
+          e.httpCode = 400;
+          throw e;
+        }
+
+        const assignedCount = Array.isArray(shift.assignedStaffIds) ? shift.assignedStaffIds.length : 0;
+        if (nextRequiredStaff < assignedCount) {
+          const e = new Error(`Không thể giảm số nhân sự xuống dưới ${assignedCount} (đã đăng ký/đã duyệt).`);
+          e.httpCode = 400;
+          throw e;
+        }
+
+        if (nextRequiredStaff > SHIFT_MAX_REQUIRED_STAFF) {
+          const e = new Error(`Số lượng nhân sự tối đa cho một ca là ${SHIFT_MAX_REQUIRED_STAFF}.`);
+          e.httpCode = 400;
+          throw e;
+        }
+
+        shift.requiredStaff = nextRequiredStaff;
+        const nextStatus = recomputeShiftStatus(shift);
+        shift.status = nextStatus;
+        await shift.save({ session });
+        resultShift = shift;
+      });
+    } catch (error) {
+      const message = String(error?.message || '');
+      const isTxnUnsupported = message.includes('Transaction') || message.includes('replica set') || message.includes('mongos');
+      if (!isTxnUnsupported) {
+        const httpCode = Number(error?.httpCode || 0);
+        if (httpCode) {
+          return res.status(httpCode).json({ success: false, message: error.message });
+        }
+        throw error;
+      }
+
+      // Fallback cho MongoDB standalone
+      const shift = await Shift.findById(shiftId);
+      if (!shift) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy ca làm.' });
+      }
+      if (shift.status === SHIFT_STATUS.CLOSED) {
+        return res.status(400).json({ success: false, message: 'Ca làm đã đóng, không thể cập nhật số nhân sự.' });
+      }
+      const shiftStartAt = buildDateTimeFromShift(shift.date, shift.startTime);
+      if (shiftStartAt && Date.now() >= shiftStartAt.getTime()) {
+        return res.status(400).json({ success: false, message: 'Ca làm đã bắt đầu, không thể cập nhật số nhân sự.' });
+      }
+      const assignedCount = Array.isArray(shift.assignedStaffIds) ? shift.assignedStaffIds.length : 0;
+      if (nextRequiredStaff < assignedCount) {
+        return res.status(400).json({ success: false, message: `Không thể giảm số nhân sự xuống dưới ${assignedCount} (đã đăng ký/đã duyệt).` });
+      }
+      if (nextRequiredStaff > SHIFT_MAX_REQUIRED_STAFF) {
+        return res.status(400).json({ success: false, message: `Số lượng nhân sự tối đa cho một ca là ${SHIFT_MAX_REQUIRED_STAFF}.` });
+      }
+
+      shift.requiredStaff = nextRequiredStaff;
+      shift.status = recomputeShiftStatus(shift);
+      await shift.save();
+      resultShift = shift;
+    } finally {
+      if (session) session.endSession();
+    }
+
+    return res.json({
+      success: true,
+      message: 'Cập nhật số nhân sự cho ca làm thành công.',
+      data: resultShift,
+    });
+  } catch (error) {
+    console.error('Update shift error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Không thể cập nhật ca làm lúc này.',
+    });
+  }
+};
+
 module.exports = {
   createShift,
   getShifts,
@@ -916,4 +1140,5 @@ module.exports = {
   getMyShiftRegistrations,
   closeShift,
   getCurrentShift,
+  updateShift,
 };

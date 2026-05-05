@@ -31,6 +31,9 @@ router.post('/check-out', requireAuth, authorize('staff'), shiftController.check
 // POST /api/shifts/undo-checkout (STAFF)
 router.post('/undo-checkout', requireAuth, authorize('staff'), shiftController.undoCheckout);
 
+// PATCH /api/shifts/:id (OWNER) - update requiredStaff
+router.patch('/:id', requireAuth, requireOwner, shiftController.updateShift);
+
 // POST /api/shifts/:shiftId/close (OWNER)
 router.post('/:shiftId/close', requireAuth, requireOwner, shiftController.closeShift);
 

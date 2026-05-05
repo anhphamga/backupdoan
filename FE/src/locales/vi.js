@@ -31,7 +31,7 @@ export const vi = {
     users: 'Người dùng',
     products: 'Sản phẩm',
     categories: 'Danh mục',
-    orders: 'Đơn hàng',
+    orders: 'Quản lý đơn bán',
     inventory: 'Quản lí kho',
     staff: 'Nhân sự',
     shifts: 'Quản lý ca làm',

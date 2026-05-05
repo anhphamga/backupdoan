@@ -84,3 +84,8 @@ export const closeShiftSchedule = (shiftId) => {
   const id = asText(shiftId)
   return axiosClient.post(`/shifts/${id}/close`)
 }
+
+export const updateShiftSchedule = (shiftId, payload = {}) => {
+  const id = asText(shiftId)
+  return axiosClient.patch(`/shifts/${id}`, payload)
+}

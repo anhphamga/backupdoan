@@ -122,6 +122,7 @@ const aggregateOrdersByStaff = async (shiftIds = []) => {
 
 const aggregateWorkedRegistrations = async (shiftIds = []) => {
   if (!shiftIds.length) return [];
+  const shiftCollection = Shift.collection.name;
   return ShiftRegistration.aggregate([
     {
       $match: {
@@ -131,15 +132,76 @@ const aggregateWorkedRegistrations = async (shiftIds = []) => {
       },
     },
     {
+      $lookup: {
+        from: shiftCollection,
+        localField: 'shiftId',
+        foreignField: '_id',
+        as: 'shift',
+      },
+    },
+    { $unwind: { path: '$shift', preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        shiftEndAt: {
+          $let: {
+            vars: {
+              endText: { $ifNull: ['$shift.endTime', ''] },
+            },
+            in: {
+              $cond: [
+                { $regexMatch: { input: '$$endText', regex: /^[0-2]\d:[0-5]\d$/ } },
+                {
+                  $dateAdd: {
+                    startDate: '$shift.date',
+                    unit: 'minute',
+                    amount: {
+                      $add: [
+                        { $multiply: [{ $toInt: { $substrBytes: ['$$endText', 0, 2] } }, 60] },
+                        { $toInt: { $substrBytes: ['$$endText', 3, 2] } },
+                      ],
+                    },
+                  },
+                },
+                null,
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
       $project: {
         staffId: 1,
         shiftId: 1,
         hoursWorked: {
-          $cond: [
-            { $and: [{ $ne: ['$checkOutAt', null] }, { $ne: ['$checkInAt', null] }] },
-            { $divide: [{ $subtract: ['$checkOutAt', '$checkInAt'] }, 1000 * 60 * 60] },
-            0,
-          ],
+          $let: {
+            vars: {
+              effectiveOut: {
+                $cond: [
+                  { $ne: ['$checkOutAt', null] },
+                  '$checkOutAt',
+                  {
+                    $cond: [
+                      { $and: [{ $ne: ['$shiftEndAt', null] }, { $gt: ['$shiftEndAt', '$checkInAt'] }] },
+                      { $min: ['$$NOW', '$shiftEndAt'] },
+                      '$$NOW',
+                    ],
+                  },
+                ],
+              },
+            },
+            in: {
+              $max: [
+                0,
+                {
+                  $divide: [
+                    { $subtract: ['$$effectiveOut', '$checkInAt'] },
+                    1000 * 60 * 60,
+                  ],
+                },
+              ],
+            },
+          },
         },
       },
     },
