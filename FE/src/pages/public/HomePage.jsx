@@ -10,6 +10,7 @@ import banner1 from "../../assets/banner/banner 1.png";
 import banner2 from "../../assets/banner/banner2 (1).png";
 import banner3 from "../../assets/banner/banner3.png";
 import { CONTACT_LINKS, UI_IMAGE_FALLBACKS } from "../../constants/ui";
+import HomeMobile from "../../features/home/HomeMobile";
 const I18N = {
   vi: {
     "brand.name": "INHERE",
@@ -201,6 +202,7 @@ const Homepage = ({ initialSection = "" }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
+  const [isMobile, setIsMobile] = useState(false);
   const lang = "vi";
   const setLang = () => { };
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -793,6 +795,43 @@ const Homepage = ({ initialSection = "" }) => {
       return featuredCategories[index];
     });
   }, [featuredCategories, categorySlideIndex, categoryVisibleCount]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(Boolean(media.matches));
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  if (isMobile) {
+    const mobileProducts = [...displayedRentProducts, ...displayedBuyProducts]
+      .filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index)
+      .slice(0, 10);
+
+    return (
+      <HomeMobile
+        heroBanners={heroBanners}
+        categories={featuredCategories.slice(0, 14)}
+        categoriesLoading={categoriesLoading}
+        products={mobileProducts}
+        productsLoading={topRentLoading || buyLoading}
+        onSelectHero={(banner) => {
+          if (banner?.targetLink) {
+            if (String(banner.targetLink).startsWith("#")) {
+              navigate(`/buy?purpose=rent`);
+              return;
+            }
+          }
+        }}
+        onSelectCategory={(category) => {
+          navigateToBuyCategory(category.value || category.displayName, category.type);
+        }}
+        onSelectProduct={(product) => navigate(`/products/${product.id}`)}
+      />
+    );
+  }
 
   return (
     <>
