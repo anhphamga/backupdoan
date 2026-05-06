@@ -68,7 +68,7 @@ export default function ProductActions({
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-[70] border-t border-slate-200 bg-white/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:hidden">
         <div className="mx-auto flex w-full max-w-lg items-center gap-2">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] text-slate-400">Giá thuê</p>
@@ -78,7 +78,7 @@ export default function ProductActions({
             type="button"
             onClick={onBuy}
             disabled={!canBuy || renting || buying}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {buying && <Spinner />}
             Mua
@@ -87,7 +87,7 @@ export default function ProductActions({
             type="button"
             onClick={onRent}
             disabled={!rentAllowed || renting || buying}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {renting && <Spinner />}
             Thuê ngay
