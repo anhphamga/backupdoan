@@ -886,7 +886,17 @@ export default function CartPage() {
     } catch (err) {
       const detail = err.response?.data?.detail ? ` (${normalizeDisplayText(err.response.data.detail)})` : ''
       const msg = normalizeDisplayText(err.response?.data?.message || 'Không thể xử lý checkout. Vui lòng thử lại.') + detail
-      if (createdRentalOrderId) {
+      const backendMessage = normalizeDisplayText(err.response?.data?.message || '')
+      const requiresGuestVerification = !isAuthenticated && (
+        err.response?.status === 401
+        || (err.response?.status === 400 && backendMessage.includes('Thiếu token xác minh guest'))
+      )
+
+      // Trường hợp cần xác minh guest: chỉ mở modal OTP, không hiển thị lỗi đỏ gây nhiễu.
+      if (requiresGuestVerification) {
+        setRentalError('')
+        setBuyError('')
+      } else if (createdRentalOrderId) {
         clearRentalCart()
         setRentalError('')
         setBuyError(`Đơn thuê ${String(createdRentalOrderId).slice(-8)} đã tạo thành công nhưng phần đơn mua bị lỗi. ${msg}`)
@@ -897,12 +907,6 @@ export default function CartPage() {
         setRentalError('')
         setBuyError(msg)
       }
-
-      const backendMessage = normalizeDisplayText(err.response?.data?.message || '')
-      const requiresGuestVerification = !isAuthenticated && (
-        err.response?.status === 401
-        || (err.response?.status === 400 && backendMessage.includes('Thiếu token xác minh guest'))
-      )
       if (requiresGuestVerification) {
         setGuestVerificationSession(null)
         setPendingGuestCheckout('combined')
