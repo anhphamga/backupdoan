@@ -4,6 +4,7 @@ import Header from '../../components/common/Header';
 import { useAuth } from '../../hooks/useAuth';
 import { getRouteByRole, normalizeRole } from '../../utils/auth';
 import { loadGoogleIdentityScript } from '../../utils/googleIdentity';
+import { isGoogleOriginAllowed } from '../../utils/googleAuthGate';
 import '../../style/AuthPages.css';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -116,6 +117,7 @@ export default function RoleLoginPage({ role }) {
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) return;
+        if (!isGoogleOriginAllowed()) return;
 
         await loadGoogleIdentityScript();
         if (!mounted || !window.google?.accounts?.id) return;
@@ -148,7 +150,6 @@ export default function RoleLoginPage({ role }) {
         window.google.accounts.id.renderButton(container, {
           theme: 'outline',
           size: 'large',
-          width: '100%',
           text: 'signin_with',
           locale: 'vi',
         });

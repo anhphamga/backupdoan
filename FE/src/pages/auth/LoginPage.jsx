@@ -8,6 +8,7 @@ import Header from '../../components/common/Header'
 import logoImage from '../../assets/logo/logo.png'
 import heroImage from '../../assets/banner/banner3.png'
 import '../../style/AuthPages.css'
+import { isGoogleOriginAllowed } from '../../utils/googleAuthGate'
 
 const PHONE_REGEX_VN = /^0\d{9}$/
 const normalizeIdentifierInput = (value = '') => toTrimmedText(value).replace(/\s+/g, ' ')
@@ -28,6 +29,8 @@ const LoginPage = () => {
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [googleEnabled, setGoogleEnabled] = useState(false)
+  const [googleDisabledReason, setGoogleDisabledReason] = useState('')
 
   const buildValidationState = (nextForm) => {
     const normalizedForm = {
@@ -104,19 +107,36 @@ const LoginPage = () => {
     }
   }
   useEffect(() => {
-    if (!window.google) return
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      setGoogleEnabled(false)
+      return
+    }
+
+    const allowed = isGoogleOriginAllowed()
+    setGoogleEnabled(Boolean(allowed))
+    if (!allowed) {
+      setGoogleDisabledReason('Google đăng nhập đang bị tắt trên domain này (origin_mismatch).')
+      return
+    }
+
+    if (!window.google?.accounts?.id) return
+
     window.google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+      client_id: clientId,
       callback: handleCredentialResponse,
     })
-    window.google.accounts.id.renderButton(
-      document.getElementById('googleBtn'),
-      {
-        theme: 'outline',
-        size: 'large',
-        width: '100%'
-      }
-    )
+
+    const container = document.getElementById('googleBtn')
+    if (!container) return
+    container.innerHTML = ''
+
+    window.google.accounts.id.renderButton(container, {
+      theme: 'outline',
+      size: 'large',
+      text: 'signin_with',
+      locale: 'vi',
+    })
   }, [])
 
   const normalizeLoginError = (apiError) => {
@@ -286,7 +306,13 @@ const LoginPage = () => {
               <span>Hoặc</span>
             </div>
 
-            <div id="googleBtn"></div>
+            {googleEnabled ? (
+              <div id="googleBtn" className="w-full" />
+            ) : (
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                {googleDisabledReason || 'Google đăng nhập hiện chưa khả dụng.'}
+              </div>
+            )}
           </form>
 
           <div className="auth-links auth-links-center">
