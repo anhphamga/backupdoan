@@ -759,6 +759,12 @@ export default function CartPage() {
       )
     }
 
+    if (!isAuthenticated && buyItems.length > 0 && !skipGuestVerification && !session?.verificationToken) {
+      setPendingGuestCheckout('combined')
+      setGuestVerificationOpen(true)
+      return
+    }
+
     const verificationOptions = {
       requireVerifiedEmail: buyItems.length > 0 && !isAuthenticated && Boolean(session?.verificationToken),
       verifiedEmail: normalizeEmail(session?.guestVerification?.email || ''),

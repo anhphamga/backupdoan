@@ -1,4 +1,4 @@
-const GuestVerification = require('../model/GuestVerification.model');
+﻿const GuestVerification = require('../model/GuestVerification.model');
 const {
   CODE_TTL_MINUTES,
   MAX_RESEND_COUNT,
@@ -201,16 +201,6 @@ exports.sendEmailCode = async (req, res) => {
     }
 
     const code = generateVerificationCode();
-    const previousState = {
-      phone: record.phone,
-      email: record.email,
-      codeHash: record.codeHash,
-      expiresAt: record.expiresAt,
-      resendCount: record.resendCount,
-      verified: record.verified,
-      verifiedAt: record.verifiedAt,
-      lastSentAt: record.lastSentAt,
-    };
     record.phone = '';
     record.email = email;
     record.codeHash = hashVerificationCode(code);
@@ -218,6 +208,13 @@ exports.sendEmailCode = async (req, res) => {
     record.resendCount += 1;
     record.lastSentAt = new Date();
     await record.save();
+
+    const allowDebugCode =
+      String(process.env.GUEST_VERIFICATION_DEBUG || '').toLowerCase() === 'true' ||
+      String(process.env.EXPOSE_GUEST_VERIFICATION_CODE || '').toLowerCase() === 'true' ||
+      String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
+
+    let deliveryFailed = false;
 
     if (hasSmtpConfig()) {
       try {
@@ -227,26 +224,25 @@ exports.sendEmailCode = async (req, res) => {
           expiresInMinutes: CODE_TTL_MINUTES,
         });
       } catch (mailError) {
-        Object.assign(record, previousState);
-        await record.save();
+        deliveryFailed = true;
         console.error('Guest email delivery error:', mailError);
-        return res.status(500).json({
-          success: false,
-          message: 'Không thể gửi mã xác minh đến email lúc này. Vui lòng thử lại sau.',
-        });
       }
     } else {
-      console.info(`[guest-email-code] ${email}: ${code}`);
+      console.info('[guest-email-code]', email + ':', code);
     }
 
     return res.json({
       success: true,
-      message: 'Đã gửi mã xác minh đến email.',
+      message: deliveryFailed
+        ? 'Không thể gửi mã xác minh đến email lúc này. Vui lòng thử lại sau.'
+        : 'Đã gửi mã xác minh đến email.',
       data: {
         expiresAt: record.expiresAt,
         resendCount: record.resendCount,
         maxResends: MAX_RESEND_COUNT,
         guestVerification: buildVerificationState(record),
+        deliveryFailed,
+        ...(allowDebugCode ? { debugCode: code } : {}),
       },
     });
   } catch (error) {
@@ -264,30 +260,30 @@ exports.verifyEmailCode = async (req, res) => {
     const code = String(req.body?.code || '').trim();
 
     if (!isValidEmail(email)) {
-      return res.status(400).json({ success: false, message: 'Email không hợp lệ.' });
+      return res.status(400).json({ success: false, message: 'Email khÃ´ng há»£p lá»‡.' });
     }
 
     if (!code) {
-      return res.status(400).json({ success: false, message: 'Vui lòng nhập mã xác minh.' });
+      return res.status(400).json({ success: false, message: 'Vui lÃ²ng nháº­p mÃ£ xÃ¡c minh.' });
     }
 
     const record = await GuestVerification.findOne({ method: 'email', target: email }).select('+codeHash');
     if (!record) {
-      return res.status(400).json({ success: false, message: 'Mã xác minh không hợp lệ hoặc chưa được gửi.' });
+      return res.status(400).json({ success: false, message: 'MÃ£ xÃ¡c minh khÃ´ng há»£p lá»‡ hoáº·c chÆ°a Ä‘Æ°á»£c gá»­i.' });
     }
 
     if (new Date(record.expiresAt) <= new Date()) {
-      return res.status(400).json({ success: false, message: 'Mã xác minh đã hết hạn. Vui lòng gửi lại mã mới.' });
+      return res.status(400).json({ success: false, message: 'MÃ£ xÃ¡c minh Ä‘Ã£ háº¿t háº¡n. Vui lÃ²ng gá»­i láº¡i mÃ£ má»›i.' });
     }
 
     if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
-      return res.status(429).json({ success: false, message: 'Mã xác minh đã vượt quá số lần thử tối đa. Vui lòng gửi mã mới.' });
+      return res.status(429).json({ success: false, message: 'MÃ£ xÃ¡c minh Ä‘Ã£ vÆ°á»£t quÃ¡ sá»‘ láº§n thá»­ tá»‘i Ä‘a. Vui lÃ²ng gá»­i mÃ£ má»›i.' });
     }
 
     if (record.codeHash !== hashVerificationCode(code)) {
       record.attempts += 1;
       await record.save();
-      return res.status(400).json({ success: false, message: 'Mã xác minh không chính xác.' });
+      return res.status(400).json({ success: false, message: 'MÃ£ xÃ¡c minh khÃ´ng chÃ­nh xÃ¡c.' });
     }
 
     record.verified = true;
@@ -301,7 +297,7 @@ exports.verifyEmailCode = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Xác minh email thành công.',
+      message: 'XÃ¡c minh email thÃ nh cÃ´ng.',
       data: {
         verificationToken,
         guestVerification: buildVerificationState(record, {
@@ -313,7 +309,7 @@ exports.verifyEmailCode = async (req, res) => {
     console.error('Verify email code error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Không thể xác minh email lúc này.',
+      message: 'KhÃ´ng thá»ƒ xÃ¡c minh email lÃºc nÃ y.',
     });
   }
 };
