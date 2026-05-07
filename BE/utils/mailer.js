@@ -4,6 +4,11 @@ const getSmtpConfig = () => ({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: Number(process.env.SMTP_PORT || 587),
   secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
+  // Render/GCP environments sometimes have broken IPv6 egress to Gmail SMTP.
+  // Force IPv4 to avoid ENETUNREACH/ETIMEDOUT when Node resolves AAAA records first.
+  family: Number(process.env.SMTP_IP_FAMILY || 4),
+  connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 15000),
+  greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 15000),
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
