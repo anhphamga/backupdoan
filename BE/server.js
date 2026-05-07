@@ -15,14 +15,23 @@ const server = http.createServer(app);
 
 // Middleware
 const corsOptions = {
-  origin: true, // reflect request origin
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+
+    const allowed =
+      origin.includes('vercel.app') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1');
+
+    if (allowed) return callback(null, true);
+    return callback(new Error('CORS blocked'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 app.use(cors(corsOptions));
 // Express + path-to-regexp v6 no longer accepts "*" as a path string.
-// Use a regex to match all routes for preflight.
 app.options(/.*/, cors(corsOptions));
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
