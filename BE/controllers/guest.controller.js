@@ -201,6 +201,40 @@ exports.sendEmailCode = async (req, res) => {
     }
 
     const code = generateVerificationCode();
+
+    const allowDebugCode =
+      String(process.env.GUEST_VERIFICATION_DEBUG || '').toLowerCase() === 'true' ||
+      String(process.env.EXPOSE_GUEST_VERIFICATION_CODE || '').toLowerCase() === 'true' ||
+      String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
+
+    const isProduction = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+    const smtpConfigured = hasSmtpConfig();
+
+    if (smtpConfigured) {
+      try {
+        await sendGuestVerificationEmail({
+          to: email,
+          code,
+          expiresInMinutes: CODE_TTL_MINUTES,
+        });
+      } catch (mailError) {
+        console.error('Guest email delivery error:', mailError);
+        return res.status(502).json({
+          success: false,
+          message: 'Không thể gửi mã xác minh đến email lúc này. Vui lòng thử lại sau.',
+          data: { deliveryFailed: true },
+        });
+      }
+    } else if (isProduction) {
+      return res.status(503).json({
+        success: false,
+        message: 'Không thể gửi mã xác minh vì hệ thống chưa cấu hình email.',
+        data: { deliveryFailed: true },
+      });
+    } else {
+      console.info('[guest-email-code]', email + ':', code);
+    }
+
     record.phone = '';
     record.email = email;
     record.codeHash = hashVerificationCode(code);
@@ -209,39 +243,14 @@ exports.sendEmailCode = async (req, res) => {
     record.lastSentAt = new Date();
     await record.save();
 
-    const allowDebugCode =
-      String(process.env.GUEST_VERIFICATION_DEBUG || '').toLowerCase() === 'true' ||
-      String(process.env.EXPOSE_GUEST_VERIFICATION_CODE || '').toLowerCase() === 'true' ||
-      String(process.env.NODE_ENV || '').toLowerCase() !== 'production';
-
-    let deliveryFailed = false;
-
-    if (hasSmtpConfig()) {
-      try {
-        await sendGuestVerificationEmail({
-          to: email,
-          code,
-          expiresInMinutes: CODE_TTL_MINUTES,
-        });
-      } catch (mailError) {
-        deliveryFailed = true;
-        console.error('Guest email delivery error:', mailError);
-      }
-    } else {
-      console.info('[guest-email-code]', email + ':', code);
-    }
-
     return res.json({
       success: true,
-      message: deliveryFailed
-        ? 'Không thể gửi mã xác minh đến email lúc này. Vui lòng thử lại sau.'
-        : 'Đã gửi mã xác minh đến email.',
+      message: 'Đã gửi mã xác minh đến email.',
       data: {
         expiresAt: record.expiresAt,
         resendCount: record.resendCount,
         maxResends: MAX_RESEND_COUNT,
         guestVerification: buildVerificationState(record),
-        deliveryFailed,
         ...(allowDebugCode ? { debugCode: code } : {}),
       },
     });
