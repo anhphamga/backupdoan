@@ -1,5 +1,38 @@
 const nodemailer = require('nodemailer');
 
+const hasResendConfig = () => Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM);
+
+const sendViaResend = async ({ to, subject, text, html }) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM;
+
+  if (!apiKey || !from) {
+    throw new Error('Resend is not configured (missing RESEND_API_KEY or RESEND_FROM)');
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to,
+      subject,
+      text,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.text().catch(() => '');
+    throw new Error(`Resend API error (${response.status}): ${payload}`);
+  }
+
+  return response.json().catch(() => ({}));
+};
+
 const getSmtpConfig = () => {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
 
@@ -70,13 +103,12 @@ const sendResetPasswordEmail = async ({ to, name, resetLink, expiresInMinutes })
     </div>
   `;
 
-  await transporter.sendMail({
-    from,
-    to,
-    subject,
-    text,
-    html,
-  });
+  if (hasResendConfig()) {
+    await sendViaResend({ to, subject, text, html });
+    return;
+  }
+
+  await transporter.sendMail({ from, to, subject, text, html });
 };
 
 const sendGuestVerificationEmail = async ({ to, code, expiresInMinutes }) => {
@@ -102,13 +134,12 @@ const sendGuestVerificationEmail = async ({ to, code, expiresInMinutes }) => {
     </div>
   `;
 
-  await transporter.sendMail({
-    from,
-    to,
-    subject,
-    text,
-    html,
-  });
+  if (hasResendConfig()) {
+    await sendViaResend({ to, subject, text, html });
+    return;
+  }
+
+  await transporter.sendMail({ from, to, subject, text, html });
 };
 
 const sendStaffInvitationEmail = async ({ to, name, inviterName, acceptLink, expiresInHours }) => {
@@ -145,13 +176,12 @@ const sendStaffInvitationEmail = async ({ to, name, inviterName, acceptLink, exp
     </div>
   `;
 
-  await transporter.sendMail({
-    from,
-    to,
-    subject,
-    text,
-    html,
-  });
+  if (hasResendConfig()) {
+    await sendViaResend({ to, subject, text, html });
+    return;
+  }
+
+  await transporter.sendMail({ from, to, subject, text, html });
 };
 
 const sendInvoiceEmail = async ({ to, buyerName, orderCode, totalAmount, invoiceNo, invoiceDate, pdfBuffer, pdfFilename }) => {
@@ -249,6 +279,7 @@ const sendInvoiceEmail = async ({ to, buyerName, orderCode, totalAmount, invoice
 };
 
 module.exports = {
+  hasResendConfig,
   hasSmtpConfig,
   sendGuestVerificationEmail,
   sendResetPasswordEmail,
