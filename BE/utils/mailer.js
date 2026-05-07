@@ -1,19 +1,40 @@
 const nodemailer = require('nodemailer');
 
-const getSmtpConfig = () => ({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
+const getSmtpConfig = () => {
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+
+  // Prefer explicit env, otherwise pick safe defaults.
+  // Gmail: SSL (465) is usually more reliable than STARTTLS (587) on some hosts.
+  const port = process.env.SMTP_PORT
+    ? Number(process.env.SMTP_PORT)
+    : host.includes('gmail.com')
+      ? 465
+      : 587;
+
+  const secure = process.env.SMTP_SECURE
+    ? String(process.env.SMTP_SECURE).toLowerCase() === 'true'
+    : port === 465;
+
   // Render/GCP environments sometimes have broken IPv6 egress to Gmail SMTP.
   // Force IPv4 to avoid ENETUNREACH/ETIMEDOUT when Node resolves AAAA records first.
-  family: Number(process.env.SMTP_IP_FAMILY || 4),
-  connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 15000),
-  greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 15000),
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+  const family = Number(process.env.SMTP_IP_FAMILY || 4);
+
+  return {
+    host,
+    port,
+    secure,
+    family,
+    connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 15000),
+    greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 15000),
+    tls: {
+      family,
+    },
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  };
+};
 
 const hasSmtpConfig = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 
