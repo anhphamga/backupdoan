@@ -21,7 +21,9 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+// Express + path-to-regexp v6 no longer accepts "*" as a path string.
+// Use a regex to match all routes for preflight.
+app.options(/.*/, cors(corsOptions));
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
